@@ -32,6 +32,20 @@ function handleFirestoreError(error: unknown, operationType: OperationType, path
   throw new Error(JSON.stringify(errInfo));
 }
 
+function cleanObject(obj: any): any {
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanObject(item));
+  }
+  if (obj !== null && typeof obj === 'object' && !(obj instanceof Date)) {
+    return Object.fromEntries(
+      Object.entries(obj)
+        .filter(([_, v]) => v !== undefined)
+        .map(([k, v]) => [k, cleanObject(v)])
+    );
+  }
+  return obj;
+}
+
 export const dbService = {
   async createConversation(title: string, preferredModel: string = "gemini-3-flash-preview", ethicalMode: string = "utilitarian"): Promise<string> {
     const path = 'conversations';
@@ -61,7 +75,7 @@ export const dbService = {
     const path = `conversations/${conversationId}`;
     try {
       await updateDoc(doc(db, 'conversations', conversationId), {
-        ...metadata,
+        ...cleanObject(metadata),
         updatedAt: serverTimestamp(),
       });
     } catch (error) {
@@ -77,7 +91,7 @@ export const dbService = {
     const path = 'messages';
     try {
       const docRef = await addDoc(collection(db, path), {
-        ...message,
+        ...cleanObject(message),
         version: 3,
         createdAt: serverTimestamp(),
       });

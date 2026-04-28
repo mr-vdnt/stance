@@ -1036,7 +1036,7 @@ export function ChatInterface({
           {biasScores ? (
             <div className="space-y-10">
               <div className="h-64 min-h-[256px] w-full bg-black/5 dark:bg-white/5 rounded-3xl p-4 flex items-center justify-center overflow-hidden">
-                <ResponsiveContainer width="100%" height="100%" minHeight={256}>
+                <ResponsiveContainer width="100%" height={256} minWidth={0} debounce={50}>
                   <RadarChart cx="50%" cy="50%" outerRadius="55%" data={biasData}>
                     <PolarGrid stroke="var(--border-color)" opacity={0.3} />
                     <PolarAngleAxis 
