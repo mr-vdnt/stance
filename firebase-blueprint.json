@@ -1,0 +1,68 @@
+{
+  "entities": {
+    "Conversation": {
+      "title": "Conversation",
+      "description": "A chat session between a user and the AI agent",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string", "description": "The UID of the user who owns this conversation" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" },
+        "title": { "type": "string" },
+        "preferredModel": { "type": "string" },
+        "ethicalMode": { "type": "string", "enum": ["utilitarian", "equal-value", "duty-based", "randomized", "interpretive"] }
+      },
+      "required": ["userId", "createdAt", "updatedAt", "preferredModel", "ethicalMode"]
+    },
+    "Message": {
+      "title": "Message",
+      "description": "An individual message within a conversation",
+      "type": "object",
+      "properties": {
+        "conversationId": { "type": "string" },
+        "role": { "type": "string", "enum": ["user", "assistant"] },
+        "content": { "type": "string" },
+        "originalContent": { "type": "string", "description": "The raw output before bias correction" },
+        "isCorrected": { "type": "boolean" },
+        "biasScores": {
+          "type": "object",
+          "properties": {
+            "toxicity": { "type": "number" },
+            "genderBias": { "type": "number" },
+            "racialBias": { "type": "number" },
+            "overallScore": { "type": "number" }
+          }
+        },
+        "feedback": { "type": "string", "enum": ["up", "down", null] },
+        "createdAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["conversationId", "role", "content", "createdAt"]
+    },
+    "AppFeedback": {
+      "title": "AppFeedback",
+      "description": "General system feedback and logs for learning",
+      "type": "object",
+      "properties": {
+        "messageId": { "type": "string" },
+        "userId": { "type": "string" },
+        "type": { "type": "string", "enum": ["up", "down"] },
+        "comment": { "type": "string" },
+        "createdAt": { "type": "string", "format": "date-time" }
+      }
+    }
+  },
+  "firestore": {
+    "conversations": {
+      "schema": "Conversation",
+      "description": "User chat sessions"
+    },
+    "messages": {
+      "schema": "Message",
+      "description": "Individual chat messages with bias metadata"
+    },
+    "feedback": {
+      "schema": "AppFeedback",
+      "description": "Feedback logs for model tuning"
+    }
+  }
+}

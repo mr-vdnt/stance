@@ -1,0 +1,70 @@
+@import "tailwindcss";
+@plugin "@tailwindcss/typography";
+
+@theme {
+  --color-brand-orange: #ff9f43;
+  --color-brand-gold: #ffc107;
+  --color-brand-pink: #f1a7c4;
+  --color-brand-green: #c4e538;
+  --color-brand-blue: #12cbc4;
+}
+
+:root {
+  --bg-app: #f4f4f2;
+  --glass-bg: rgba(255, 255, 255, 0.4);
+  --glass-border: rgba(255, 255, 255, 0.7);
+  --text-main: #1a1a1a;
+  --bubble-ai: rgba(255, 255, 255, 0.8);
+  --bubble-user: rgba(241, 167, 196, 0.2);
+  --input-bg: rgba(255, 255, 255, 0.6);
+  --gradient-cta: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+}
+
+.dark {
+  --bg-app: #0c0d12;
+  --glass-bg: rgba(20, 22, 28, 0.6);
+  --glass-border: rgba(255, 255, 255, 0.08);
+  --text-main: #f1f3f7;
+  --bubble-ai: rgba(30, 32, 40, 0.6);
+  --bubble-user: rgba(255, 159, 67, 0.15);
+  --input-bg: rgba(20, 22, 28, 0.8);
+  --gradient-cta: linear-gradient(135deg, #ff9f43 0%, #ffc107 100%);
+}
+
+@layer base {
+  body {
+    @apply bg-[var(--bg-app)] text-[var(--text-main)] font-sans h-screen overflow-hidden transition-colors duration-500 antialiased;
+  }
+}
+
+.glass-morphism {
+  @apply backdrop-blur-2xl border border-[var(--glass-border)] shadow-xl;
+}
+
+.glass-card {
+  @apply backdrop-blur-3xl border border-[var(--glass-border)] bg-[var(--glass-bg)] shadow-2xl;
+}
+
+.liquid-btn {
+  @apply relative overflow-hidden transition-all duration-300 active:scale-95 shadow-lg;
+  background: linear-gradient(135deg, #9d50bb 0%, #6eebd0 100%);
+}
+
+.liquid-btn::after {
+  content: '';
+  @apply absolute inset-0 bg-white/20 opacity-0 hover:opacity-100 transition-opacity duration-300;
+  box-shadow: inset 0 0 20px rgba(255, 255, 255, 0.4);
+}
+
+@keyframes float {
+  0%, 100% { transform: translateY(0) scale(1); }
+  50% { transform: translateY(-20px) scale(1.05); }
+}
+
+.animate-float {
+  animation: float 12s ease-in-out infinite;
+}
+
+.custom-scrollbar::-webkit-scrollbar {
+  width: 4px;
+}

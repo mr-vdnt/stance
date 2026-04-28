@@ -1,0 +1,159 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // 0. Default deny
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // 3. Path Variable Hardening (global helpers)
+    function isValidId(id) { 
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); 
+    }
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isOwner(userId) {
+      return isSignedIn() && request.auth.uid == userId;
+    }
+
+    function incoming() {
+      return request.resource.data;
+    }
+    
+    function existing() {
+      return resource.data;
+    }
+
+    // Conversations
+    match /conversations/{convId} {
+      function isValidConversation(data) {
+        return data.userId is string
+          && data.title is string
+          && data.title.size() <= 200
+          && (data.get('preferredModel', '') is string)
+          && (data.get('ethicalMode', 'utilitarian') in ['utilitarian', 'equal-value', 'duty-based', 'randomized', 'interpretive'])
+          && data.createdAt is timestamp
+          && data.updatedAt is timestamp;
+      }
+
+      allow create: if isSignedIn() 
+        && isValidId(convId)
+        && incoming().userId == request.auth.uid
+        && isValidConversation(incoming())
+        && incoming().keys().hasAll(['userId', 'title', 'preferredModel', 'ethicalMode', 'createdAt', 'updatedAt'])
+        && incoming().keys().size() == 6;
+        
+      allow get: if isSignedIn() 
+        && isValidId(convId)
+        && (resource.data.userId == request.auth.uid || resource.data.userId == 'anonymous');
+
+      allow list: if isSignedIn()
+        && (resource.data.userId == request.auth.uid || resource.data.userId == 'anonymous');
+      
+      allow update: if isOwner(resource.data.userId) 
+        && isValidId(convId)
+        && isValidConversation(incoming())
+        && incoming().diff(resource.data).affectedKeys().hasOnly(['updatedAt', 'title', 'preferredModel', 'ethicalMode']);
+
+      allow delete: if isOwner(resource.data.userId);
+    }
+
+    // Messages
+    match /messages/{msgId} {
+      function isValidBiasScores(scores) {
+        return scores.toxicity is number
+          && scores.genderBias is number
+          && scores.racialBias is number
+          && scores.politicalBias is number
+          && scores.ageism is number
+          && scores.ableism is number
+          && scores.socialBias is number
+          && scores.economicBias is number
+          && scores.overallScore is number
+          && scores.biasVariance is number
+          && scores.confidenceScores is map
+          && scores.confidenceScores.toxicity is number
+          && scores.confidenceScores.genderBias is number
+          && scores.confidenceScores.racialBias is number
+          && scores.confidenceScores.politicalBias is number
+          && scores.confidenceScores.ageism is number
+          && scores.confidenceScores.ableism is number
+          && scores.confidenceScores.socialBias is number
+          && scores.confidenceScores.economicBias is number;
+      }
+
+      function isValidMessage(data) {
+        return data.conversationId is string
+          && data.role in ['user', 'assistant']
+          && data.content is string
+          && data.content.size() <= 10000
+          && (data.get('originalContent', '') is string)
+          && (data.get('isCorrected', false) is bool)
+          && (data.get('isDeleted', false) is bool)
+          && (data.get('isGloballyDeleted', false) is bool)
+          && (data.get('deletedAt', null) == null || data.get('deletedAt', null) is timestamp)
+          && (data.get('parentId', null) == null || isValidId(data.parentId))
+          && (data.get('version', 3) is int)
+          && (data.get('feedback', null) == null || data.get('feedback', null) in ['up', 'down'])
+          && (data.get('biasScores', null) == null || isValidBiasScores(data.biasScores))
+          && data.createdAt is timestamp;
+      }
+
+      function canWriteMessage(convId) {
+        let conv = get(/databases/$(database)/documents/conversations/$(convId)).data;
+        return isOwner(conv.userId);
+      }
+
+      allow create: if isSignedIn()
+        && isValidId(msgId)
+        && isValidMessage(incoming())
+        && canWriteMessage(incoming().conversationId);
+        
+      allow get: if isSignedIn() 
+        && isValidId(msgId)
+        && canWriteMessage(resource.data.conversationId);
+
+      allow list: if isSignedIn()
+        && canWriteMessage(resource.data.conversationId);
+      
+      allow update: if isSignedIn() 
+        && isValidId(msgId)
+        && (
+          (incoming().diff(resource.data).affectedKeys().hasOnly(['feedback']) && (incoming().feedback in ['up', 'down', null]))
+          ||
+          (incoming().diff(resource.data).affectedKeys().hasOnly(['isDeleted', 'deletedAt', 'content']) && incoming().isDeleted == true)
+        )
+        && canWriteMessage(resource.data.conversationId);
+
+      allow delete: if isSignedIn() 
+        && isValidId(msgId)
+        && canWriteMessage(resource.data.conversationId);
+    }
+
+    // Feedback
+    match /feedback/{feedbackId} {
+      function isValidFeedback(data) {
+        return data.userId == request.auth.uid
+          && data.messageId is string
+          && data.type in ['up', 'down']
+          && (data.get('comment', '') is string)
+          && data.createdAt is timestamp;
+      }
+
+      allow create: if isSignedIn()
+        && isValidId(feedbackId)
+        && isValidFeedback(incoming());
+      
+      allow read: if isOwner(resource.data.userId);
+    }
+
+    // Test collection
+    match /test/connection {
+      allow read: if true;
+    }
+  }
+}
