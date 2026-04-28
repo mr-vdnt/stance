@@ -1,19 +1,112 @@
 import { useState } from "react";
-import { ThumbsUp, ThumbsDown, Info, ChevronDown, ChevronUp, MoreHorizontal, Trash2, RotateCcw } from "lucide-react";
+import { ThumbsUp, ThumbsDown, Info, ChevronDown, ChevronUp, MoreHorizontal, Trash2, RotateCcw, FileText, Image as ImageIcon, Video, Music, Download, ExternalLink, Edit3 } from "lucide-react";
 import ReactMarkdown from "react-markdown";
-import { Message } from "../types";
+import { Message, Attachment } from "../types";
 import { cn } from "../lib/utils";
 import { dbService } from "../services/dbService";
+import { motion, AnimatePresence } from "motion/react";
+
+interface AttachmentPreviewProps {
+  attachment: Attachment;
+}
+
+function AttachmentPreview({ attachment }: AttachmentPreviewProps) {
+  const isImage = attachment.type.startsWith('image/');
+  const isVideo = attachment.type.startsWith('video/');
+  const isAudio = attachment.type.startsWith('audio/');
+  const isDoc = !isImage && !isVideo && !isAudio;
+
+  return (
+    <div className="group/file relative rounded-3xl overflow-hidden border border-[var(--border-color)] bg-white dark:bg-white/5 transition-all hover:shadow-xl hover:scale-[1.02] duration-500">
+      {isImage && (
+        <div className="aspect-video w-full overflow-hidden bg-zinc-100 dark:bg-zinc-900">
+          <img 
+            src={attachment.previewUrl || attachment.url} 
+            alt={attachment.name} 
+            className="w-full h-full object-cover transition-transform duration-700 group-hover/file:scale-110"
+          />
+        </div>
+      )}
+
+      {isVideo && (
+        <div className="aspect-video w-full bg-black relative">
+          <video 
+            src={attachment.url} 
+            controls 
+            className="w-full h-full"
+            poster={attachment.previewUrl}
+          />
+        </div>
+      )}
+
+      {isAudio && (
+        <div className="p-6 bg-indigo-500/5 flex flex-col gap-4">
+          <div className="flex items-center gap-4">
+            <div className="w-12 h-12 rounded-2xl bg-indigo-500/10 flex items-center justify-center">
+              <Music className="w-6 h-6 text-indigo-500" />
+            </div>
+            <div className="flex flex-col">
+              <span className="text-sm font-bold text-[var(--text-main)] truncate max-w-[200px]">{attachment.name}</span>
+              <span className="text-[10px] text-zinc-500 font-bold uppercase tracking-widest">Audio Content</span>
+            </div>
+          </div>
+          <audio src={attachment.url} controls className="w-full h-8 opacity-80" />
+        </div>
+      )}
+
+      {!isAudio && (
+        <div className="p-5 flex items-center justify-between gap-4">
+          <div className="flex items-center gap-3">
+            {!isImage && !isVideo && (
+              <div className="w-10 h-10 rounded-xl bg-indigo-500/10 flex items-center justify-center">
+                <FileText className="w-5 h-5 text-indigo-500" />
+              </div>
+            )}
+            <div className="flex flex-col min-w-0">
+              <span className="text-xs font-bold text-[var(--text-main)] truncate max-w-[150px]">{attachment.name}</span>
+              <span className="text-[9px] text-zinc-500 font-bold uppercase tracking-wider">{(attachment.size / 1024).toFixed(0)} KB</span>
+            </div>
+          </div>
+          
+          <div className="flex items-center gap-2">
+            <a 
+              href={attachment.url} 
+              target="_blank" 
+              rel="noopener noreferrer"
+              className="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 text-zinc-500 transition-colors"
+              title="Open Original"
+            >
+              <ExternalLink className="w-4 h-4" />
+            </a>
+            <a 
+              href={attachment.url} 
+              download={attachment.name}
+              className="p-2 rounded-xl bg-indigo-500/10 text-indigo-500 hover:bg-indigo-500 hover:text-white transition-all shadow-sm"
+              title="Download"
+            >
+              <Download className="w-4 h-4" />
+            </a>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
 
 interface MessageItemProps {
   message: Message;
   onDelete?: (id: string, type: 'soft' | 'hard') => void;
+  onRewrite?: (id: string, content: string) => void;
 }
 
-export function MessageItem({ message, onDelete }: MessageItemProps) {
+export function MessageItem({ message, onDelete, onRewrite }: MessageItemProps) {
   const [showOriginal, setShowOriginal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
+  const [isEditing, setIsEditing] = useState(false);
+  const [isExpanded, setIsExpanded] = useState(false);
+  const [editContent, setEditContent] = useState(message.content);
   const isAssistant = message.role === "assistant";
+  const isLongText = message.content.length > 800;
 
   const handleFeedback = async (type: 'up' | 'down') => {
     if (message.id) {
@@ -30,8 +123,8 @@ export function MessageItem({ message, onDelete }: MessageItemProps) {
         <div className={cn(
           "w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center text-[9px] font-bold border opacity-50",
           isAssistant 
-            ? "bg-black/5 dark:bg-white/5 text-zinc-500 border-black/5 dark:border-white/5" 
-            : "bg-brand-orange/10 text-brand-orange border-brand-orange/20"
+            ? "bg-white dark:bg-white/5 text-zinc-400 border-black/5 dark:border-white/5" 
+            : "bg-indigo-50 text-indigo-400 border-indigo-100"
         )}>
           {isAssistant ? "AI" : "YOU"}
         </div>
@@ -52,79 +145,183 @@ export function MessageItem({ message, onDelete }: MessageItemProps) {
     )}>
       {/* Avatar/Role Icon */}
       <div className={cn(
-        "w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center text-[9px] font-bold border transition-all group-hover:scale-110 duration-500",
+        "w-10 h-10 rounded-2xl shrink-0 flex items-center justify-center text-[9px] font-bold border transition-all group-hover:scale-110 duration-500 shadow-sm",
         isAssistant 
-          ? "bg-black/5 dark:bg-white/5 text-zinc-500 border-black/5 dark:border-white/5" 
-          : "bg-brand-orange/10 text-brand-orange border-brand-orange/20 shadow-lg shadow-brand-orange/10"
+          ? "bg-white dark:bg-white/5 text-zinc-500 border-[var(--border-color)] dark:border-white/5" 
+          : "bg-indigo-600 text-white border-indigo-700 shadow-indigo-200"
       )}>
         {isAssistant ? "AI" : "YOU"}
       </div>
 
-      <div className="flex-1 space-y-4 min-w-0 relative">
+      <div className="flex-1 min-w-0 flex flex-col space-y-4">
         <div className={cn(
-          "px-8 py-7 rounded-[2.5rem] border backdrop-blur-2xl transition-all duration-500 shadow-2xl group",
+          "px-8 py-7 rounded-[2.5rem] border backdrop-blur-2xl transition-all duration-500 group relative w-full",
           isAssistant 
-            ? "bg-[var(--bubble-ai)] border-[var(--glass-border)] text-[var(--text-main)]" 
-            : "bg-[var(--bubble-user)] border-brand-orange/5 text-[var(--text-main)] shadow-brand-orange/5"
+            ? "bg-[var(--bubble-ai)] border-[var(--glass-border)] text-[var(--text-main)] shadow-sm max-w-[800px] self-start" 
+            : "bg-[var(--bubble-user)] border-indigo-100/50 text-[var(--text-main)] shadow-sm max-w-[700px] self-end"
         )}>
-          {/* Action Menu */}
-          <div className={cn(
-            "absolute top-4 opacity-0 group-hover:opacity-100 transition-opacity z-10",
-            isAssistant ? "right-4" : "left-4"
-          )}>
-            <div className="relative">
+          {/* Action Menu (Top-Right of bubble) */}
+          <div className="absolute top-4 right-4 opacity-0 group-hover:opacity-100 transition-all duration-300 z-10 translate-y-2 group-hover:translate-y-0 text-right">
+            <div className="relative inline-block">
               <button 
                 onClick={() => setShowMenu(!showMenu)}
-                className="p-2 rounded-xl bg-black/5 dark:bg-white/5 text-zinc-500 hover:text-[var(--text-main)] transition-colors"
+                aria-label="Message actions"
+                className="p-2 rounded-xl bg-black/5 dark:bg-white/5 text-zinc-500 hover:text-[var(--text-main)] hover:bg-black/10 dark:hover:bg-white/10 transition-all shadow-sm"
               >
                 <MoreHorizontal className="w-4 h-4" />
               </button>
               
-              {showMenu && (
-                <div className={cn(
-                  "absolute mt-2 w-56 rounded-2xl bg-[var(--glass-bg)] border border-[var(--glass-border)] backdrop-blur-3xl shadow-2xl p-1.5 z-20 overflow-hidden",
-                  isAssistant ? "right-0" : "left-0"
-                )}>
-                  <button 
-                    onClick={() => {
-                      if (message.id) onDelete?.(message.id, 'soft');
-                      setShowMenu(false);
-                    }}
-                    className="w-full flex flex-col items-start px-4 py-3 text-sm text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors group/item"
+              <AnimatePresence>
+                {showMenu && (
+                  <motion.div 
+                    initial={{ opacity: 0, scale: 0.95, y: -10 }}
+                    animate={{ opacity: 1, scale: 1, y: 0 }}
+                    exit={{ opacity: 0, scale: 0.95, y: -10 }}
+                    className="absolute right-0 mt-2 w-56 rounded-2xl bg-[var(--glass-bg)] border border-[var(--glass-border)] backdrop-blur-3xl shadow-2xl p-1.5 z-20 overflow-hidden text-left"
                   >
-                    <div className="flex items-center gap-3 font-bold group-hover/item:text-[var(--text-main)] transition-colors">
-                      <Trash2 className="w-4 h-4 text-rose-400" />
-                      Soft Redaction
-                    </div>
-                    <span className="text-[9px] uppercase tracking-widest mt-1 opacity-40">Local Only</span>
-                  </button>
+                    {!isAssistant ? (
+                      // User Messages: Exactly 2 options
+                      <>
+                        <button 
+                          onClick={() => {
+                            setIsEditing(true);
+                            setShowMenu(false);
+                          }}
+                          className="w-full flex items-center justify-between px-4 py-3 text-sm text-[var(--text-main)] hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors group/item"
+                        >
+                          <div className="flex items-center gap-3 font-bold uppercase tracking-wider text-[10px]">
+                            <Edit3 className="w-3.5 h-3.5 text-indigo-500" />
+                            Rewrite Prompt
+                          </div>
+                        </button>
 
-                  <div className="h-px bg-[var(--glass-border)] my-1" />
+                        <div className="h-px bg-[var(--glass-border)] my-1" />
 
-                  <button 
-                    onClick={() => {
-                      if (message.id) onDelete?.(message.id, 'hard');
-                      setShowMenu(false);
-                    }}
-                    className="w-full flex flex-col items-start px-4 py-3 text-sm text-rose-600 hover:bg-rose-500/10 rounded-xl transition-colors group/item"
-                  >
-                    <div className="flex items-center gap-3 font-bold">
-                      <RotateCcw className="w-4 h-4" />
-                      Protocol Wipe
-                    </div>
-                    <span className="text-[9px] uppercase tracking-widest mt-1 opacity-50 font-black">History Rollback</span>
-                  </button>
-                </div>
-              )}
+                        <button 
+                          onClick={() => {
+                            if (message.id) onDelete?.(message.id, 'hard');
+                            setShowMenu(false);
+                          }}
+                          className="w-full flex items-center justify-between px-4 py-3 text-sm text-rose-600 hover:bg-rose-500/10 rounded-xl transition-colors group/item"
+                        >
+                          <div className="flex items-center gap-3 font-bold uppercase tracking-wider text-[10px]">
+                            <Trash2 className="w-3.5 h-3.5" />
+                            Delete Prompt
+                          </div>
+                        </button>
+                      </>
+                    ) : (
+                      // Assistant Messages
+                      <>
+                        <button 
+                          onClick={() => {
+                            if (message.id) onDelete?.(message.id, 'soft');
+                            setShowMenu(false);
+                          }}
+                          className="w-full flex flex-col items-start px-4 py-3 text-sm text-zinc-500 hover:bg-black/5 dark:hover:bg-white/5 rounded-xl transition-colors group/item"
+                        >
+                          <div className="flex items-center gap-3 font-bold group-hover/item:text-[var(--text-main)] transition-colors text-[10px] uppercase tracking-wider">
+                            <Trash2 className="w-3.5 h-3.5 text-rose-400" />
+                            Soft Redaction
+                          </div>
+                          <span className="text-[8px] uppercase tracking-widest mt-1 opacity-40">Local Only</span>
+                        </button>
+
+                        <div className="h-px bg-[var(--glass-border)] my-1" />
+
+                        <button 
+                          onClick={() => {
+                            if (message.id) onDelete?.(message.id, 'hard');
+                            setShowMenu(false);
+                          }}
+                          className="w-full flex flex-col items-start px-4 py-3 text-sm text-rose-600 hover:bg-rose-500/10 rounded-xl transition-colors group/item"
+                        >
+                          <div className="flex items-center gap-3 font-bold text-[10px] uppercase tracking-wider">
+                            <RotateCcw className="w-3.5 h-3.5" />
+                            Protocol Wipe
+                          </div>
+                          <span className="text-[8px] uppercase tracking-widest mt-1 opacity-50 font-black">History Rollback</span>
+                        </button>
+                      </>
+                    )}
+                  </motion.div>
+                )}
+              </AnimatePresence>
             </div>
           </div>
 
           <div className={cn(
-            "prose prose-sm max-w-none leading-relaxed font-sans font-medium dark:prose-invert",
+            "prose prose-sm max-w-none leading-relaxed font-sans font-medium dark:prose-invert markdown-body",
             isAssistant ? "text-[var(--text-main)]" : "text-[var(--text-main)]"
           )}>
-            <ReactMarkdown>{message.content}</ReactMarkdown>
+            {isEditing ? (
+              <div className="space-y-4">
+                <textarea 
+                  value={editContent}
+                  onChange={(e) => setEditContent(e.target.value)}
+                  className="w-full min-h-[120px] bg-black/5 dark:bg-white/5 border border-indigo-500/30 rounded-2xl p-4 text-sm font-medium focus:outline-none focus:ring-2 focus:ring-indigo-500/20 transition-all text-[var(--text-main)]"
+                  autoFocus
+                />
+                <div className="flex items-center gap-3">
+                  <button 
+                    onClick={() => {
+                      if (message.id) onRewrite?.(message.id, editContent);
+                      setIsEditing(false);
+                    }}
+                    className="px-6 py-2 rounded-xl bg-indigo-600 text-white text-[10px] font-bold uppercase tracking-widest hover:bg-indigo-700 shadow-lg shadow-indigo-500/20 transition-all active:scale-95"
+                  >
+                    Confirm Rewrite
+                  </button>
+                  <button 
+                    onClick={() => {
+                      setIsEditing(false);
+                      setEditContent(message.content);
+                    }}
+                    className="px-6 py-2 rounded-xl bg-black/5 dark:bg-white/5 border border-[var(--glass-border)] text-zinc-500 text-[10px] font-bold uppercase tracking-widest hover:text-[var(--text-main)] transition-all"
+                  >
+                    Cancel
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="whitespace-pre-wrap break-words flow-text">
+                <div className={cn(
+                  "relative transition-all duration-700 ease-in-out overflow-hidden",
+                  !isExpanded && isLongText ? "max-h-[250px]" : "max-h-[none]"
+                )}>
+                  <ReactMarkdown>{message.content}</ReactMarkdown>
+                  {!isExpanded && isLongText && (
+                    <div className={cn(
+                      "absolute bottom-0 inset-x-0 h-32 bg-gradient-to-t pointer-events-none",
+                      isAssistant ? "from-[var(--bubble-ai)]" : "from-[var(--bubble-user)]"
+                    )} />
+                  )}
+                </div>
+                {isLongText && (
+                  <button 
+                    onClick={() => setIsExpanded(!isExpanded)}
+                    className="mt-6 flex items-center gap-2 text-[9px] font-black uppercase tracking-[0.2em] text-indigo-500 hover:text-indigo-600 transition-all group/expand"
+                  >
+                    <div className="w-6 h-6 rounded-lg bg-indigo-500/10 flex items-center justify-center group-hover/expand:bg-indigo-500 group-hover/expand:text-white transition-all">
+                      {isExpanded ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+                    </div>
+                    {isExpanded ? 'Compress Analysis' : 'Expand Logical Vector'}
+                  </button>
+                )}
+              </div>
+            )}
           </div>
+
+          {message.attachments && message.attachments.length > 0 && (
+            <div className={cn(
+              "grid gap-4 mt-6",
+              message.attachments.length > 1 ? "grid-cols-1 md:grid-cols-2" : "grid-cols-1"
+            )}>
+              {message.attachments.map((attachment) => (
+                <AttachmentPreview key={attachment.id} attachment={attachment} />
+              ))}
+            </div>
+          )}
 
           {isAssistant && (
             <div className="flex items-center justify-end gap-3 mt-6 pt-6 border-t border-black/5 dark:border-white/5 opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-2 group-hover:translate-y-0">

@@ -10,39 +10,91 @@
 }
 
 :root {
-  --bg-app: #f4f4f2;
-  --glass-bg: rgba(255, 255, 255, 0.4);
-  --glass-border: rgba(255, 255, 255, 0.7);
-  --text-main: #1a1a1a;
-  --bubble-ai: rgba(255, 255, 255, 0.8);
-  --bubble-user: rgba(241, 167, 196, 0.2);
-  --input-bg: rgba(255, 255, 255, 0.6);
-  --gradient-cta: linear-gradient(135deg, #f39c12 0%, #e67e22 100%);
+  /* SaaS Light Theme Tokens */
+  --bg-app: #F5F7FA;
+  --bg-primary: #F5F7FA;
+  --bg-secondary: #FFFFFF;
+  --bg-card: #FFFFFF;
+  --bg-gradient: linear-gradient(135deg, #EEF2FF 0%, #F8FAFC 100%);
+
+  --text-main: #1F2937;
+  --text-secondary: #6B7280;
+
+  --border-color: #E5E7EB;
+  --glass-border: rgba(229, 231, 235, 0.5);
+  --glass-edge: rgba(255, 255, 255, 0.8);
+  --glass-bg: rgba(255, 255, 255, 0.7);
+  
+  --accent-primary: #4F46E5;
+  --accent-secondary: #06B6D4;
+
+  --shadow-soft: 0 4px 20px rgba(0, 0, 0, 0.05);
+  --shadow-card: 0 8px 30px rgba(0, 0, 0, 0.08);
+  --glass-shadow: var(--shadow-soft);
+
+  --bubble-ai: #FFFFFF;
+  --bubble-user: #EEF2FF;
+  --input-bg: rgba(255, 255, 255, 0.9);
+  --gradient-cta: linear-gradient(135deg, #4F46E5 0%, #06B6D4 100%);
 }
 
 .dark {
   --bg-app: #0c0d12;
-  --glass-bg: rgba(20, 22, 28, 0.6);
-  --glass-border: rgba(255, 255, 255, 0.08);
+  --bg-gradient: radial-gradient(circle at top right, #1a1c2e 0%, #0c0d12 100%);
+  --glass-bg: rgba(15, 17, 24, 0.65);
+  --glass-border: rgba(255, 255, 255, 0.06);
+  --glass-edge: rgba(255, 255, 255, 0.1);
+  --glass-shadow: rgba(0, 0, 0, 0.4);
   --text-main: #f1f3f7;
-  --bubble-ai: rgba(30, 32, 40, 0.6);
-  --bubble-user: rgba(255, 159, 67, 0.15);
-  --input-bg: rgba(20, 22, 28, 0.8);
+  --text-secondary: #94a3b8;
+  --bubble-ai: rgba(28, 30, 42, 0.7);
+  --bubble-user: rgba(255, 159, 67, 0.1);
+  --input-bg: rgba(15, 17, 24, 0.8);
   --gradient-cta: linear-gradient(135deg, #ff9f43 0%, #ffc107 100%);
 }
 
 @layer base {
   body {
-    @apply bg-[var(--bg-app)] text-[var(--text-main)] font-sans h-screen overflow-hidden transition-colors duration-500 antialiased;
+    @apply bg-[var(--bg-app)] text-[var(--text-main)] font-sans h-screen overflow-hidden transition-all duration-500 antialiased;
+    background-image: var(--bg-gradient);
+  }
+
+  /* Global smooth transitions for theme switching */
+  *, *::before, *::after {
+    transition-property: background-color, border-color, color, fill, stroke, box-shadow, opacity;
+    transition-duration: 500ms;
+    transition-timing-function: cubic-bezier(0.4, 0, 0.2, 1);
+  }
+
+  /* Reset transitions for elements that need immediate feedback or have their own animations */
+  .motion-safe\:transition-none,
+  [data-no-transition],
+  .animate-pulse,
+  .animate-spin {
+    transition: none !important;
   }
 }
 
 .glass-morphism {
-  @apply backdrop-blur-2xl border border-[var(--glass-border)] shadow-xl;
+  @apply backdrop-blur-xl border border-[var(--glass-border)] shadow-xl bg-[var(--glass-bg)] transition-all duration-500;
+}
+
+.glass-panel {
+  @apply backdrop-blur-xl border border-[var(--glass-border)] bg-[var(--glass-bg)] shadow-[var(--glass-shadow)] transition-all duration-500;
+  border-top: 1px solid var(--glass-edge);
+  border-left: 1px solid var(--glass-edge);
 }
 
 .glass-card {
-  @apply backdrop-blur-3xl border border-[var(--glass-border)] bg-[var(--glass-bg)] shadow-2xl;
+  @apply backdrop-blur-2xl border border-[var(--glass-border)] bg-[var(--glass-bg)] 
+         shadow-[var(--shadow-card)] dark:shadow-[0_20px_50px_rgba(0,0,0,0.4)] transition-all duration-500;
+  border-top: 1px solid var(--glass-edge);
+}
+
+.glass-modal {
+  @apply backdrop-blur-3xl border border-[var(--glass-border)] bg-[var(--glass-bg)]
+         shadow-[0_40px_100px_rgba(0,0,0,0.1)] dark:shadow-[0_40px_100px_rgba(0,0,0,0.6)] transition-all duration-500;
+  border-top: 1px solid var(--glass-edge);
 }
 
 .liquid-btn {
@@ -67,4 +119,19 @@
 
 .custom-scrollbar::-webkit-scrollbar {
   width: 4px;
+}
+
+/* Paragraph Flow Styles */
+.flow-text p {
+  @apply mb-6 last:mb-0 leading-[1.7] text-[15px] md:text-[16px] font-sans font-medium tracking-normal;
+}
+
+.flow-text {
+  @apply max-w-none w-full break-words whitespace-pre-wrap;
+}
+
+.markdown-body {
+  @apply prose-headings:font-bold prose-headings:tracking-tight prose-headings:mb-4 prose-headings:mt-8 first:prose-headings:mt-0;
+  @apply prose-strong:text-indigo-600 dark:prose-strong:text-indigo-400;
+  @apply prose-code:bg-black/5 dark:prose-code:bg-white/5 prose-code:rounded-lg prose-code:px-1.5 prose-code:py-0.5 prose-code:font-mono;
 }

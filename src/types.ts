@@ -46,12 +46,22 @@ export interface BiasScores {
   summary?: string;
 }
 
+export interface Attachment {
+  id: string;
+  name: string;
+  type: string; // MIME type
+  url: string;
+  size: number;
+  previewUrl?: string; // For images/videos
+}
+
 export interface Message {
   id?: string;
   conversationId: string;
   role: 'user' | 'assistant';
   content: string;
   originalContent?: string;
+  attachments?: Attachment[];
   isCorrected?: boolean;
   biasScores?: BiasScores;
   feedback?: 'up' | 'down' | null;

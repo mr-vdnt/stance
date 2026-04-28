@@ -14,6 +14,20 @@
       },
       "required": ["userId", "createdAt", "updatedAt", "preferredModel", "ethicalMode"]
     },
+    "Attachment": {
+      "title": "Attachment",
+      "description": "Metadata for an uploaded file",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "url": { "type": "string" },
+        "size": { "type": "number" },
+        "previewUrl": { "type": "string" }
+      },
+      "required": ["id", "name", "type", "url", "size"]
+    },
     "Message": {
       "title": "Message",
       "description": "An individual message within a conversation",
@@ -22,6 +36,10 @@
         "conversationId": { "type": "string" },
         "role": { "type": "string", "enum": ["user", "assistant"] },
         "content": { "type": "string" },
+        "attachments": {
+          "type": "array",
+          "items": { "$ref": "entities/Attachment" }
+        },
         "originalContent": { "type": "string", "description": "The raw output before bias correction" },
         "isCorrected": { "type": "boolean" },
         "biasScores": {

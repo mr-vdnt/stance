@@ -1,6 +1,6 @@
 {
-  "name": "STANCE",
-  "description": "An AI assistant focused on absolute rationality and definitive analytical judgment, with a sophisticated glassmorphic interface.",
-  "requestFramePermissions": [],
+  "name": "STANCE | Multi-Modal Intelligence",
+  "description": "An advanced AI analyst enforcing the Absolute Decisiveness Protocol. Supports universal file analysis (Documents, Images, Video, Audio) with real-time bias monitoring and a liquid glass interface.",
+  "requestFramePermissions": ["camera", "microphone"],
   "majorCapabilities": []
 }

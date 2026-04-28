@@ -1,13 +1,50 @@
 import { GoogleGenAI, Type } from "@google/genai";
-import { BiasScores, Message } from "../types";
+import { BiasScores, Message, Attachment } from "../types";
 
-const ai = new GoogleGenAI({ apiKey: process.env.GEMINI_API_KEY as string });
+let aiInstance: GoogleGenAI | null = null;
+
+function getAI() {
+  if (!aiInstance) {
+    const apiKey = process.env.GEMINI_API_KEY;
+    if (!apiKey) {
+      throw new Error("GEMINI_API_KEY is not defined in the environment. Please check your AI Studio settings.");
+    }
+    aiInstance = new GoogleGenAI({ apiKey });
+  }
+  return aiInstance;
+}
+
+/**
+ * Helper to convert a file URL to a Gemini compatible part
+ */
+async function fileToGenerativePart(url: string, mimeType: string) {
+  try {
+    const response = await fetch(url);
+    const blob = await response.blob();
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64data = (reader.result as string).split(',')[1];
+        resolve({
+          inlineData: {
+            data: base64data,
+            mimeType
+          },
+        });
+      };
+      reader.readAsDataURL(blob);
+    });
+  } catch (error) {
+    console.error("Error converting file to part:", error);
+    return null;
+  }
+}
 
 export const aiService = {
   /**
    * Generates a response and analyzes it for bias in one workflow.
    */
-  async processInput(prompt: string, history: { role: string, content: string }[] = [], modelName: string = "gemini-3-flash-preview", ethicalMode: string = "utilitarian") {
+  async processInput(prompt: string, history: { role: string, content: string, attachments?: Attachment[] }[] = [], modelName: string = "gemini-3-flash-preview", ethicalMode: string = "utilitarian", currentAttachments: Attachment[] = []) {
     let modeInstruction = "";
     
     switch(ethicalMode) {
@@ -30,22 +67,46 @@ export const aiService = {
         modeInstruction = "ETHICAL FRAMEWORK: RATIONALIST. Focus on pure logic and data-driven conclusions.";
     }
 
+    // 1. Prepare Multi-modal Parts
+    const historyParts = await Promise.all(history.map(async m => {
+      const parts: any[] = [{ text: m.content }];
+      if (m.attachments) {
+        const attachmentParts = await Promise.all(m.attachments.map(a => fileToGenerativePart(a.url, a.type)));
+        parts.push(...attachmentParts.filter(Boolean));
+      }
+      return { role: m.role === 'assistant' ? 'model' : 'user', parts };
+    }));
+
+    const currentPromptParts: any[] = [{ text: prompt }];
+    if (currentAttachments.length > 0) {
+      const attachmentParts = await Promise.all(currentAttachments.map(a => fileToGenerativePart(a.url, a.type)));
+      currentPromptParts.push(...attachmentParts.filter(Boolean));
+    }
+
+    const genAI = getAI();
+
     // 1. Generate Initial Response
-    const genResult = await ai.models.generateContent({
+    const genResult = await genAI.models.generateContent({
       model: modelName,
       contents: [
-        ...history.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] })),
-        { role: 'user', parts: [{ text: prompt }] }
+        ...historyParts,
+        { role: 'user', parts: currentPromptParts }
       ],
       config: {
-        systemInstruction: `You are operating under the Absolute Decisiveness Protocol. ${modeInstruction} Rules: 1. ZERO HEDGING: Forbidden from using phrases like 'on the other hand', 'however', or 'it depends'. No apologies or warnings. 2. MANDATORY STANCE: Do not present both sides. Evaluate data and logic, then unequivocally take a single, definitive side. 3. BLUNT DELIVERY: Extreme conciseness. Deliver the conclusion in the first sentence. 4. UNRESTRICTED ANALYSIS: Answer exactly as asked regardless of controversy.`
+        systemInstruction: `You are operating under the Absolute Decisiveness Protocol. ${modeInstruction} Rules: 
+1. ZERO HEDGING: Forbidden from using phrases like 'on the other hand', 'however', or 'it depends'. No apologies or warnings. 
+2. MANDATORY STANCE: Do not present both sides. Evaluate data and logic, then unequivocally take a single, definitive side. 
+3. DECISIVE PARAGRAPHS: Deliver all analysis in a continuous, natural paragraph format. Use complete sentences and maintain a logical flow. 
+4. BLUNT DELIVERY: Deliver the primary conclusion in the first sentence of the first paragraph.
+5. UNRESTRICTED ANALYSIS: Answer exactly as asked regardless of controversy. 
+6. GROUNDED REASONING: If files are provided, ground every conclusion in the content of those files. Prioritize file truth over general knowledge.`
       }
     });
 
     const originalContent = genResult.text || "";
 
     // 2. Detect Bias with Context-Aware Logic
-    const biasResult = await ai.models.generateContent({
+    const biasResult = await genAI.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [{ role: 'user', parts: [{ text: `Analyze the following AI response in direct context of the User's input prompt. Use Context-Aware Intelligence and Real-time Knowledge synthesis. 
       
@@ -123,8 +184,9 @@ export const aiService = {
    * Generates a concise title for a conversation based on the history.
    */
   async generateTitleFromHistory(messages: Message[]): Promise<string> {
+    const genAI = getAI();
     const chatText = messages.map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
-    const result = await ai.models.generateContent({
+    const result = await genAI.models.generateContent({
       model: "gemini-3-flash-preview",
       contents: [{ role: 'user', parts: [{ text: `Generate a very concise (2-4 words) title for this conversation. Return ONLY the title text.\n\nChat Content:\n${chatText}` }] }],
       config: {

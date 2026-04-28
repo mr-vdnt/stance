@@ -139,13 +139,13 @@ export default function App() {
            style={{ backgroundImage: 'radial-gradient(circle at 2px 2px, rgba(255,255,255,0.05) 1px, transparent 0)', backgroundSize: '24px 24px' }}></div>
       
       {/* Sophisticated Glows */}
-      <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-brand-orange/5 blur-[120px] dark:bg-brand-orange/10 animate-pulse"></div>
-      <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-brand-pink/5 blur-[120px] dark:bg-brand-pink/10"></div>
+      <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-500/5 blur-[120px] dark:bg-indigo-500/10 animate-pulse transition-all duration-700"></div>
+      <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-cyan-500/5 blur-[120px] dark:bg-cyan-500/10 transition-all duration-700"></div>
 
       <div className="w-full h-full max-w-7xl flex gap-10 relative z-10 animate-in fade-in zoom-in-95 duration-1000">
         {/* Sidebar - Desktop & Mobile Drawer */}
         <aside className={cn(
-          "w-80 glass-card rounded-none md:rounded-[2.5rem] flex flex-col overflow-hidden transition-all duration-500 z-50",
+          "w-80 glass-panel rounded-none md:rounded-[2.5rem] flex flex-col overflow-hidden transition-all duration-500 z-50",
           "fixed inset-y-0 left-0 lg:relative lg:translate-x-0 lg:flex",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         )}>
@@ -159,7 +159,7 @@ export default function App() {
                   onClick={() => setIsDarkMode(!isDarkMode)}
                   className="p-2.5 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-90"
                 >
-                  {isDarkMode ? <Sun className="w-4 h-4 text-brand-gold" /> : <Moon className="w-4 h-4 text-zinc-500" />}
+                  {isDarkMode ? <Sun className="w-4 h-4 text-indigo-400" /> : <Moon className="w-4 h-4 text-zinc-400" />}
                 </button>
               </div>
             </div>
@@ -178,7 +178,7 @@ export default function App() {
           </div>
           
           <div className="flex-1 px-4 py-6 overflow-y-auto custom-scrollbar space-y-1.5 font-sans">
-            <span className="px-4 text-[10px] font-bold text-zinc-500 uppercase tracking-widest mb-4 block opacity-50">Recent History</span>
+            <span className="px-4 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-4 block opacity-60">Recent History</span>
             {conversations.map((conv) => (
               <div
                 key={conv.id}
@@ -189,13 +189,13 @@ export default function App() {
                 className={cn(
                   "w-full flex items-center gap-3.5 px-4 py-3 rounded-2xl transition-all text-left group cursor-pointer",
                   activeConversationId === conv.id 
-                    ? "bg-white/10 dark:bg-white/5 text-[var(--text-main)] shadow-sm ring-1 ring-white/10" 
-                    : "text-zinc-500 hover:text-[var(--text-main)] hover:bg-white/5"
+                    ? "bg-white dark:bg-white/10 text-[var(--accent-primary)] shadow-sm ring-1 ring-[#EEF2FF] dark:ring-white/10" 
+                    : "text-[var(--text-secondary)] hover:text-[var(--text-main)] hover:bg-white/50"
                 )}
               >
                 <div className={cn(
                   "p-2 rounded-xl transition-colors shrink-0",
-                  activeConversationId === conv.id ? "bg-brand-orange/20 text-brand-orange" : "bg-black/5 dark:bg-white/5 text-zinc-600 group-hover:text-zinc-400"
+                  activeConversationId === conv.id ? "bg-indigo-500/10 text-indigo-600" : "bg-black/5 dark:bg-white/5 text-zinc-400 group-hover:text-zinc-500"
                 )}>
                   <History className="w-3.5 h-3.5" />
                 </div>
@@ -266,7 +266,7 @@ export default function App() {
         )}
 
         {/* Main Interface Wrapper */}
-        <div className="flex-1 flex flex-col min-w-0 glass-card rounded-none md:rounded-[2.5rem] overflow-hidden animate-in fade-in zoom-in-95 duration-1000 delay-200">
+        <div className="flex-1 flex flex-col min-w-0 glass-panel rounded-none md:rounded-[2.5rem] overflow-hidden animate-in fade-in zoom-in-95 duration-1000 delay-200 transition-all duration-500">
             <ChatInterface 
               activeConversationId={activeConversationId} 
               setActiveConversationId={setActiveConversationId}
@@ -295,7 +295,7 @@ export default function App() {
               initial={{ opacity: 0, scale: 0.9, y: 20 }}
               animate={{ opacity: 1, scale: 1, y: 0 }}
               exit={{ opacity: 0, scale: 0.9, y: 20 }}
-              className="relative w-full max-w-md glass-card p-8 rounded-[2rem] overflow-hidden border border-rose-500/20"
+              className="relative w-full max-w-md glass-modal p-8 rounded-[2rem] overflow-hidden border border-rose-500/20"
             >
               <div className="absolute top-0 left-0 w-full h-1 bg-gradient-to-r from-rose-500/20 via-rose-500 to-rose-500/20"></div>
               

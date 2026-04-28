@@ -10,7 +10,8 @@ import {
   doc,
   getDocs,
   deleteDoc,
-  writeBatch
+  writeBatch,
+  deleteField
 } from 'firebase/firestore';
 import { db, auth } from '../lib/firebase';
 import { OperationType, Message, Conversation } from '../types';
@@ -165,6 +166,22 @@ export const dbService = {
         isDeleted: true,
         deletedAt: serverTimestamp(),
         content: "[METADATA REDACTED]", // Masking content for soft delete
+        biasScores: deleteField(),
+        originalContent: deleteField(),
+        isCorrected: deleteField(),
+        attachments: deleteField(),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  },
+
+  async updateMessageContent(messageId: string, content: string): Promise<void> {
+    const path = `messages/${messageId}`;
+    try {
+      await updateDoc(doc(db, 'messages', messageId), {
+        content,
+        updatedAt: serverTimestamp(),
       });
     } catch (error) {
       handleFirestoreError(error, OperationType.UPDATE, path);

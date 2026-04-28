@@ -86,22 +86,34 @@ service cloud.firestore {
           && scores.confidenceScores.economicBias is number;
       }
 
-      function isValidMessage(data) {
-        return data.conversationId is string
-          && data.role in ['user', 'assistant']
-          && data.content is string
-          && data.content.size() <= 10000
-          && (data.get('originalContent', '') is string)
-          && (data.get('isCorrected', false) is bool)
-          && (data.get('isDeleted', false) is bool)
-          && (data.get('isGloballyDeleted', false) is bool)
-          && (data.get('deletedAt', null) == null || data.get('deletedAt', null) is timestamp)
-          && (data.get('parentId', null) == null || isValidId(data.parentId))
-          && (data.get('version', 3) is int)
-          && (data.get('feedback', null) == null || data.get('feedback', null) in ['up', 'down'])
-          && (data.get('biasScores', null) == null || isValidBiasScores(data.biasScores))
-          && data.createdAt is timestamp;
-      }
+    function isValidAttachment(attachment) {
+      return attachment.id is string
+        && attachment.name is string
+        && attachment.name.size() <= 500
+        && attachment.type is string
+        && attachment.url is string
+        && attachment.url.size() <= 2000
+        && attachment.size is number
+        && (attachment.get('previewUrl', '') is string);
+    }
+
+    function isValidMessage(data) {
+      return data.conversationId is string
+        && data.role in ['user', 'assistant']
+        && data.content is string
+        && data.content.size() <= 10000
+        && (data.get('attachments', null) == null || (data.attachments is list && data.attachments.size() <= 10 && (data.attachments.size() == 0 || isValidAttachment(data.attachments[0]))))
+        && (data.get('originalContent', '') is string)
+        && (data.get('isCorrected', false) is bool)
+        && (data.get('isDeleted', false) is bool)
+        && (data.get('isGloballyDeleted', false) is bool)
+        && (data.get('deletedAt', null) == null || data.get('deletedAt', null) is timestamp)
+        && (data.get('parentId', null) == null || isValidId(data.parentId))
+        && (data.get('version', 3) is int)
+        && (data.get('feedback', null) == null || data.get('feedback', null) in ['up', 'down'])
+        && (data.get('biasScores', null) == null || isValidBiasScores(data.biasScores))
+        && data.createdAt is timestamp;
+    }
 
       function canWriteMessage(convId) {
         let conv = get(/databases/$(database)/documents/conversations/$(convId)).data;
