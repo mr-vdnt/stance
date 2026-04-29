@@ -55,6 +55,14 @@ export interface Attachment {
   previewUrl?: string; // For images/videos
 }
 
+export interface OptimizationReport {
+  improved_response: string;
+  indicator_scores_before: Record<string, number>;
+  indicator_scores_after: Record<string, number>;
+  changes_made: string[];
+  rationale_summary: string;
+}
+
 export interface Message {
   id?: string;
   conversationId: string;
@@ -64,6 +72,7 @@ export interface Message {
   attachments?: Attachment[];
   isCorrected?: boolean;
   biasScores?: BiasScores;
+  optimizationReport?: OptimizationReport;
   feedback?: 'up' | 'down' | null;
   isDeleted?: boolean;
   isGloballyDeleted?: boolean;

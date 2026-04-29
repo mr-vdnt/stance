@@ -73,6 +73,7 @@ service cloud.firestore {
           && scores.ableism is number
           && scores.socialBias is number
           && scores.economicBias is number
+          && scores.logical is number
           && scores.overallScore is number
           && scores.biasVariance is number
           && scores.confidenceScores is map
@@ -83,7 +84,9 @@ service cloud.firestore {
           && scores.confidenceScores.ageism is number
           && scores.confidenceScores.ableism is number
           && scores.confidenceScores.socialBias is number
-          && scores.confidenceScores.economicBias is number;
+          && scores.confidenceScores.economicBias is number
+          && scores.confidenceScores.logical is number
+          && (scores.get('summary', '') is string);
       }
 
     function isValidAttachment(attachment) {
@@ -95,6 +98,15 @@ service cloud.firestore {
         && attachment.url.size() <= 2000
         && attachment.size is number
         && (attachment.get('previewUrl', '') is string);
+    }
+
+    function isValidOptimizationReport(report) {
+      return report is map
+        && report.improved_response is string
+        && report.indicator_scores_before is map
+        && report.indicator_scores_after is map
+        && report.changes_made is list
+        && report.rationale_summary is string;
     }
 
     function isValidMessage(data) {
@@ -112,6 +124,7 @@ service cloud.firestore {
         && (data.get('version', 3) is int)
         && (data.get('feedback', null) == null || data.get('feedback', null) in ['up', 'down'])
         && (data.get('biasScores', null) == null || isValidBiasScores(data.biasScores))
+        && (data.get('optimizationReport', null) == null || isValidOptimizationReport(data.optimizationReport))
         && data.createdAt is timestamp;
     }
 
@@ -134,12 +147,17 @@ service cloud.firestore {
       
       allow update: if isSignedIn() 
         && isValidId(msgId)
+        && isValidMessage(incoming())
+        && canWriteMessage(resource.data.conversationId)
         && (
-          (incoming().diff(resource.data).affectedKeys().hasOnly(['feedback']) && (incoming().feedback in ['up', 'down', null]))
+          (incoming().diff(resource.data).affectedKeys().hasOnly(['feedback']))
           ||
           (incoming().diff(resource.data).affectedKeys().hasOnly(['isDeleted', 'deletedAt', 'content']) && incoming().isDeleted == true)
-        )
-        && canWriteMessage(resource.data.conversationId);
+          ||
+          (incoming().diff(resource.data).affectedKeys().hasOnly(['biasScores']))
+          ||
+          (incoming().diff(resource.data).affectedKeys().hasOnly(['optimizationReport', 'content', 'isCorrected']))
+        );
 
       allow delete: if isSignedIn() 
         && isValidId(msgId)

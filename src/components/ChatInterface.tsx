@@ -1,5 +1,5 @@
 import { useState, useEffect, useRef } from "react";
-import { Send, Loader2, ShieldAlert, Cpu, LogIn, LogOut, User as UserIcon, Layers, Upload, Camera, Mic, Paperclip, ChevronRight, AlertCircle, Trash2, Edit2, Sun, Moon, RotateCcw, X, FileText, Image as ImageIcon, Video, Music } from "lucide-react";
+import { Send, Loader2, ShieldAlert, Cpu, LogIn, LogOut, User as UserIcon, Layers, Upload, Camera, Mic, Paperclip, ChevronRight, AlertCircle, Trash2, Edit2, Sun, Moon, RotateCcw, X, FileText, Image as ImageIcon, Video, Music, Newspaper } from "lucide-react";
 import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { Message, Attachment } from "../types";
@@ -7,6 +7,7 @@ import { aiService } from "../services/aiService";
 import { dbService } from "../services/dbService";
 import { uploadFile } from "../services/storageService";
 import { MessageItem } from "./MessageItem";
+import { NewsFeed } from "./NewsFeed";
 import { cn } from "../lib/utils";
 import { motion, AnimatePresence } from "motion/react";
 
@@ -46,12 +47,14 @@ export function ChatInterface({
   isDarkMode,
   onToggleTheme
 }: ChatInterfaceProps) {
+  const [isAuthenticating, setIsAuthenticating] = useState(false);
   const [user, setUser] = useState<User | null>(null);
   const [messages, setMessages] = useState<Message[]>([]);
   const [currentTitle, setCurrentTitle] = useState("New Conversation");
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState(MODELS[0].id);
+  const [streamingText, setStreamingText] = useState<string | null>(null);
   const [ethicalMode, setEthicalMode] = useState<typeof ETHICAL_MODES[number]['id']>('utilitarian');
   const [error, setError] = useState<string | null>(null);
   const [deleteConfig, setDeleteConfig] = useState<{ id: string, type: 'soft' | 'hard' } | null>(null);
@@ -61,6 +64,7 @@ export function ChatInterface({
   const [showCommands, setShowCommands] = useState(false);
   const [commandQuery, setCommandQuery] = useState("");
   const [selectedCommandIndex, setSelectedCommandIndex] = useState(0);
+  const [showNewsFeed, setShowNewsFeed] = useState(false);
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -253,6 +257,9 @@ export function ChatInterface({
   }, [activeConversationId, user]);
 
   const handleLogin = async () => {
+    if (isAuthenticating) return;
+    
+    setIsAuthenticating(true);
     setError(null);
     const provider = new GoogleAuthProvider();
     try {
@@ -260,10 +267,17 @@ export function ChatInterface({
     } catch (err: any) {
       if (err.code === 'auth/popup-blocked') {
         setError("AUTHENTICATION BLOCKED: Please enable popups for this site or open the app in a NEW TAB to continue.");
+      } else if (err.code === 'auth/cancelled-popup-request') {
+        // Silently handle cancelled request
+        console.log("Auth popup request cancelled.");
+      } else if (err.code === 'auth/popup-closed-by-user') {
+        // Silently handle user closing popup
       } else {
         setError(err.message || "Failed to establish secure link.");
       }
       console.error("Login failed:", err);
+    } finally {
+      setIsAuthenticating(false);
     }
   };
 
@@ -291,7 +305,10 @@ export function ChatInterface({
     setError(null);
 
     try {
-      const result = await aiService.processInput(
+      setStreamingText("");
+      let finalFullText = "";
+
+      const stream = aiService.processStreamingInput(
         lastUserMsg.content, 
         historyForAI, 
         selectedModel, 
@@ -299,18 +316,32 @@ export function ChatInterface({
         lastUserMsg.attachments || []
       );
 
-      await dbService.addMessage({
+      for await (const part of stream) {
+        if (!part.isFull && part.chunk) {
+          setStreamingText(prev => (prev || "") + part.chunk);
+        } else if (part.isFull) {
+          finalFullText = part.fullResponse || "";
+        }
+      }
+
+      setStreamingText(null);
+
+      const assistantMsgId = await dbService.addMessage({
         conversationId: activeConversationId,
         role: "assistant",
-        content: result.finalContent,
-        originalContent: result.originalContent,
-        biasScores: result.biasScores,
-        isCorrected: result.isCorrected,
+        content: finalFullText,
+        originalContent: finalFullText,
+        isCorrected: false,
         parentId: lastUserMsg.id
       });
 
+      // Background rationality & fairness optimization
+      aiService.optimizeResponse(lastUserMsg.content, finalFullText).then(report => {
+        if (assistantMsgId && report) dbService.updateMessageOptimizationReport(assistantMsgId, report);
+      });
+
       // Update title with new context
-      const updatedHistory = [...historyToUse, { role: 'assistant', content: result.finalContent } as Message];
+      const updatedHistory = [...historyToUse, { role: 'assistant', content: finalFullText } as Message];
       const newTitle = await aiService.generateTitleFromHistory(updatedHistory);
       await dbService.updateConversationTitle(activeConversationId, newTitle);
       
@@ -353,7 +384,10 @@ export function ChatInterface({
       const currentMessage = messages[msgIndex];
       const attachmentsToUse = currentMessage.attachments || [];
 
-      const result = await aiService.processInput(
+      setStreamingText("");
+      let finalFullText = "";
+
+      const stream = aiService.processStreamingInput(
         newContent, 
         historyForAI, 
         selectedModel, 
@@ -361,21 +395,34 @@ export function ChatInterface({
         attachmentsToUse
       );
 
-      // 4. Add new assistant message linked to the rewritten prompt
-      await dbService.addMessage({
+      for await (const part of stream) {
+        if (!part.isFull && part.chunk) {
+          setStreamingText(prev => (prev || "") + part.chunk);
+        } else if (part.isFull) {
+          finalFullText = part.fullResponse || "";
+        }
+      }
+
+      setStreamingText(null);
+
+      const assistantMsgId = await dbService.addMessage({
         conversationId: activeConversationId,
         role: "assistant",
-        content: result.finalContent,
-        originalContent: result.originalContent,
-        biasScores: result.biasScores,
-        isCorrected: result.isCorrected,
+        content: finalFullText,
+        originalContent: finalFullText,
+        isCorrected: false,
         parentId: messageId
+      });
+
+      // Background rationality & fairness optimization
+      aiService.optimizeResponse(newContent, finalFullText).then(report => {
+        if (assistantMsgId && report) dbService.updateMessageOptimizationReport(assistantMsgId, report);
       });
 
       // 5. Sync Rational Monitor (happens automatically via subscription)
       
       // 6. Update title
-      const updatedHistory = [...historyToUse, { role: 'user', content: newContent }, { role: 'assistant', content: result.finalContent }] as Message[];
+      const updatedHistory = [...historyToUse, { role: 'user', content: newContent }, { role: 'assistant', content: finalFullText }] as Message[];
       const newTitle = await aiService.generateTitleFromHistory(updatedHistory);
       await dbService.updateConversationTitle(activeConversationId, newTitle);
 
@@ -491,28 +538,45 @@ export function ChatInterface({
         parentId: lastMsgId
       });
 
-      const history = messages
+      const historyForAI = messages
         .filter(m => !m.isDeleted)
         .map(m => ({ role: m.role, content: m.content, attachments: m.attachments }));
         
-      const result = await aiService.processInput(userText, history, selectedModel, ethicalMode, uploadedAttachments);
+      setStreamingText("");
+      let finalFullText = "";
+      
+      const stream = aiService.processStreamingInput(userText, historyForAI, selectedModel, ethicalMode, uploadedAttachments);
+      
+      for await (const part of stream) {
+        if (!part.isFull && part.chunk) {
+          setStreamingText(prev => (prev || "") + part.chunk);
+        } else if (part.isFull) {
+          finalFullText = part.fullResponse || "";
+        }
+      }
 
-      await dbService.addMessage({
+      setStreamingText(null);
+
+      const assistantMsgId = await dbService.addMessage({
         conversationId: currentId,
         role: "assistant",
-        content: result.finalContent,
-        originalContent: result.originalContent,
-        isCorrected: result.isCorrected,
-        biasScores: result.biasScores,
+        content: finalFullText,
+        originalContent: finalFullText,
+        isCorrected: false,
         parentId: userMsgId || lastMsgId
       });
 
-      // Update title after every exchange to keep it descriptive
+      // Trigger optimization in background to keep UI responsive
+      aiService.optimizeResponse(userText, finalFullText).then(report => {
+        if (assistantMsgId && report) dbService.updateMessageOptimizationReport(assistantMsgId, report);
+      });
+
+      // Update title with full history
       const updatedHistory = [
         ...messages,
-        { role: 'user', content: userText, conversationId: currentId, attachments: uploadedAttachments, createdAt: new Date() },
-        { role: 'assistant', content: result.finalContent, conversationId: currentId, createdAt: new Date() }
-      ] as Message[];
+        { role: 'user', content: userText, attachments: uploadedAttachments } as Message,
+        { role: 'assistant', content: finalFullText } as Message
+      ];
       
       const newTitle = await aiService.generateTitleFromHistory(updatedHistory);
       await dbService.updateConversationTitle(currentId, newTitle);
@@ -572,6 +636,20 @@ export function ChatInterface({
             </div>
           </div>
           <div className="flex items-center gap-3 md:gap-6">
+            <button 
+              onClick={() => setShowNewsFeed(!showNewsFeed)}
+              className={cn(
+                "p-2.5 rounded-2xl transition-all relative group",
+                showNewsFeed ? "bg-indigo-500 text-white shadow-lg" : "bg-black/5 dark:bg-white/5 text-[var(--text-main)] hover:bg-black/10"
+              )}
+              title="Global News Feed"
+            >
+              <Newspaper className="w-5 h-5" />
+              {showNewsFeed && (
+                <div className="absolute -top-1 -right-1 w-2.5 h-2.5 bg-emerald-500 border-2 border-white dark:border-zinc-900 rounded-full" />
+              )}
+            </button>
+
             {user ? (
               <div className="flex items-center gap-2 md:gap-4">
                 <div className="hidden sm:flex flex-col items-end">
@@ -593,11 +671,12 @@ export function ChatInterface({
             ) : (
               <button 
                 onClick={handleLogin}
-                className="flex items-center gap-2.5 px-4 md:px-6 py-2.5 text-white text-[10px] font-bold uppercase tracking-widest rounded-2xl transition-all shadow-xl active:scale-95"
+                disabled={isAuthenticating}
+                className="flex items-center gap-2.5 px-4 md:px-6 py-2.5 text-white text-[10px] font-bold uppercase tracking-widest rounded-2xl transition-all shadow-xl active:scale-95 disabled:opacity-70"
                 style={{ background: 'var(--gradient-cta)' }}
               >
-                <LogIn className="w-4 h-4" />
-                <span className="hidden sm:inline">Auth Init</span>
+                {isAuthenticating ? <Loader2 className="w-4 h-4 animate-spin" /> : <LogIn className="w-4 h-4" />}
+                <span className="hidden sm:inline">{isAuthenticating ? "Authenticating..." : "Auth Init"}</span>
               </button>
             )}
           </div>
@@ -667,15 +746,21 @@ export function ChatInterface({
                    <p className="text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.4em] opacity-80">I resolve. I distinguish. I decide.</p>
                  </div>
 
-                 {!user && (
+                  {!user && (
                     <button 
                       onClick={handleLogin}
-                      className="px-12 py-4 text-white text-[10px] uppercase font-bold tracking-[0.3em] rounded-full transition-all shadow-2xl hover:scale-105 active:scale-95"
+                      disabled={isAuthenticating}
+                      className="px-12 py-4 text-white text-[10px] uppercase font-bold tracking-[0.3em] rounded-full transition-all shadow-2xl hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed mx-auto"
                       style={{ background: 'var(--gradient-cta)' }}
                     >
-                      Establish Link
+                      {isAuthenticating ? (
+                        <>
+                          <Loader2 className="w-4 h-4 animate-spin" />
+                          Establishing...
+                        </>
+                      ) : "Establish Link"}
                     </button>
-                 )}
+                  )}
                </div>
             </div>
           )}
@@ -689,6 +774,18 @@ export function ChatInterface({
                 onRewrite={handleRewriteMessage}
               />
             ))}
+
+            {streamingText !== null && (
+              <MessageItem 
+                message={{
+                  id: "streaming",
+                  role: "assistant",
+                  content: streamingText,
+                  createdAt: new Date(),
+                  conversationId: activeConversationId || "new"
+                }}
+              />
+            )}
           </div>
 
           {!isLoading && messages.length > 0 && messages.filter(m => !m.isDeleted).slice(-1)[0]?.role === 'user' && (
@@ -707,7 +804,7 @@ export function ChatInterface({
             </motion.div>
           )}
 
-          {isLoading && (
+          {isLoading && streamingText === null && (
             <div className="flex gap-4 md:gap-8 animate-in fade-in slide-in-from-left-2 duration-500">
               <div className="w-10 h-10 bg-black/5 dark:bg-white/5 text-zinc-500 rounded-2xl flex items-center justify-center flex-shrink-0 text-[10px] font-bold animate-pulse uppercase tracking-tighter">AI</div>
               <div className="flex-1 bg-[var(--bubble-ai)] px-8 py-7 rounded-[2.5rem] border border-[var(--border-color)] flex items-center gap-4 shadow-sm">
@@ -729,11 +826,11 @@ export function ChatInterface({
                   initial={{ opacity: 0, scale: 0.95, y: 10 }}
                   animate={{ opacity: 1, scale: 1, y: 0 }}
                   exit={{ opacity: 0, scale: 0.95, y: 10 }}
-                  className="absolute bottom-full mb-6 w-full max-w-md left-0 rounded-[2rem] bg-[#0B0F1A]/95 border border-indigo-500/20 backdrop-blur-3xl shadow-[0_20px_50px_rgba(0,0,0,0.5)] overflow-hidden z-50 p-2"
+                  className="absolute bottom-full mb-6 w-full max-w-md left-0 rounded-[2rem] bg-[var(--glass-bg)] border border-[var(--glass-border)] backdrop-blur-3xl shadow-[var(--shadow-card)] overflow-hidden z-50 p-2"
                 >
-                  <div className="px-5 py-3 border-b border-white/5 flex items-center justify-between">
+                  <div className="px-5 py-3 border-b border-[var(--glass-border)] flex items-center justify-between">
                     <span className="text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500">Logical Operatives</span>
-                    <span className="text-[9px] font-bold text-zinc-600 bg-white/5 px-2 py-0.5 rounded-md">↑↓ to navigate</span>
+                    <span className="text-[9px] font-bold text-[var(--text-secondary)] bg-indigo-500/5 px-2 py-0.5 rounded-md">↑↓ to navigate</span>
                   </div>
                   <div className="max-h-60 overflow-y-auto custom-scrollbar">
                     {filteredCommands.map((cmd, idx) => (
@@ -743,12 +840,12 @@ export function ChatInterface({
                         onMouseEnter={() => setSelectedCommandIndex(idx)}
                         className={cn(
                           "w-full flex items-center gap-4 px-5 py-4 transition-all text-left",
-                          selectedCommandIndex === idx ? "bg-indigo-600/10 text-white" : "text-zinc-500 hover:bg-white/5"
+                          selectedCommandIndex === idx ? "bg-indigo-600/10 text-[var(--text-main)]" : "text-[var(--text-secondary)] hover:bg-[var(--bg-app)]"
                         )}
                       >
                         <div className={cn(
                           "w-10 h-10 rounded-xl flex items-center justify-center transition-all",
-                          selectedCommandIndex === idx ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20" : "bg-white/5"
+                          selectedCommandIndex === idx ? "bg-indigo-500 text-white shadow-lg shadow-indigo-500/20" : "bg-[var(--bg-app)]"
                         )}>
                           {cmd.icon}
                         </div>
@@ -772,7 +869,7 @@ export function ChatInterface({
               {/* Glow Effect */}
               <div className="absolute -inset-[1px] bg-gradient-to-r from-indigo-500/0 via-indigo-500/20 to-indigo-500/0 rounded-[2rem] opacity-0 group-focus-within/composer:opacity-100 transition-opacity duration-1000 blur-sm pointer-events-none" />
               
-              <div className="relative bg-[#0B0F1A]/80 dark:bg-[#0B0F1A]/90 border border-white/5 group-focus-within/composer:border-indigo-500/30 backdrop-blur-3xl rounded-[2rem] p-4 transition-all duration-700 shadow-2xl overflow-hidden">
+              <div className="relative bg-[var(--glass-bg)] border border-[var(--glass-border)] group-focus-within/composer:border-indigo-500/30 backdrop-blur-3xl rounded-[2rem] p-4 transition-all duration-700 shadow-[var(--shadow-card)] overflow-hidden">
                 
                 {/* File Chips inside Input */}
                 <AnimatePresence>
@@ -781,7 +878,7 @@ export function ChatInterface({
                       initial={{ opacity: 0, height: 0 }}
                       animate={{ opacity: 1, height: 'auto' }}
                       exit={{ opacity: 0, height: 0 }}
-                      className="flex flex-wrap gap-2 px-3 pb-4 pt-1 mb-2 border-b border-white/5"
+                      className="flex flex-wrap gap-2 px-3 pb-4 pt-1 mb-2 border-b border-[var(--glass-border)]"
                     >
                       {pendingFiles.map((file, idx) => (
                         <motion.div 
@@ -795,7 +892,7 @@ export function ChatInterface({
                              file.type.startsWith('video/') ? <Video className="w-3.5 h-3.5 text-indigo-500" /> :
                              <FileText className="w-3.5 h-3.5 text-indigo-500" />}
                           </div>
-                          <span className="text-[10px] font-bold text-zinc-300 truncate max-w-[100px]">{file.name}</span>
+                          <span className="text-[10px] font-bold text-[var(--text-main)] truncate max-w-[100px]">{file.name}</span>
                           <button 
                             onClick={() => removePendingFile(idx)}
                             className="p-1.5 rounded-lg hover:bg-rose-500/10 text-zinc-500 hover:text-rose-500 transition-all opacity-40 group-hover/chip:opacity-100"
@@ -835,7 +932,7 @@ export function ChatInterface({
                     placeholder={user ? "Execute logical query..." : "Authentication Required"}
                     rows={1}
                     disabled={!user || isLoading}
-                    className="flex-1 bg-transparent border-none p-3 text-[15px] font-medium text-zinc-200 placeholder:text-zinc-600 focus:outline-none resize-none custom-scrollbar min-h-[48px] max-h-[300px] transition-all"
+                    className="flex-1 bg-transparent border-none p-3 text-[15px] font-medium text-[var(--text-main)] placeholder:text-[var(--text-secondary)] focus:outline-none resize-none custom-scrollbar min-h-[48px] max-h-[300px] transition-all"
                   />
 
                   {/* Multi-modal Action Row */}
@@ -848,18 +945,18 @@ export function ChatInterface({
                       className="hidden" 
                     />
                     
-                    <div className="flex items-center gap-1 pr-4 mr-2 border-r border-white/5">
+                    <div className="flex items-center gap-1 pr-4 mr-2 border-r border-[var(--glass-border)]">
                       <button 
                         type="button" 
                         onClick={() => fileInputRef.current?.click()}
-                        className="p-3 rounded-2xl text-zinc-500 hover:text-indigo-400 hover:bg-white/5 transition-all group/icon"
+                        className="p-3 rounded-2xl text-[var(--text-secondary)] hover:text-indigo-500 hover:bg-indigo-500/5 transition-all group/icon"
                         title="Attach Media"
                       >
                         <ImageIcon className="w-4 h-4 transition-transform group-hover/icon:scale-110" />
                       </button>
                       <button 
                         type="button" 
-                        className="p-3 rounded-2xl text-zinc-500 hover:text-indigo-400 hover:bg-white/5 transition-all group/icon"
+                        className="p-3 rounded-2xl text-[var(--text-secondary)] hover:text-indigo-500 hover:bg-indigo-500/5 transition-all group/icon"
                         title="Voice Input"
                       >
                         <Mic className="w-4 h-4 transition-transform group-hover/icon:scale-110" />
@@ -867,7 +964,7 @@ export function ChatInterface({
                       <button 
                         type="button" 
                         onClick={() => fileInputRef.current?.click()}
-                        className="p-3 rounded-2xl text-zinc-500 hover:text-indigo-400 hover:bg-white/5 transition-all group/icon"
+                        className="p-3 rounded-2xl text-[var(--text-secondary)] hover:text-indigo-500 hover:bg-indigo-500/5 transition-all group/icon"
                         title="Attach Metadata"
                       >
                         <Paperclip className="w-4 h-4 transition-transform group-hover/icon:scale-110" />
@@ -882,7 +979,7 @@ export function ChatInterface({
                         "w-12 h-12 rounded-2xl flex items-center justify-center transition-all shadow-xl active:scale-95 group/send relative",
                         (input.trim() || pendingFiles.length > 0) && !isLoading 
                           ? "bg-indigo-600 text-white shadow-indigo-600/20" 
-                          : "bg-zinc-800 text-zinc-500"
+                          : "bg-[var(--border-color)] text-[var(--text-secondary)]"
                       )}
                     >
                       {isLoading ? (
@@ -893,7 +990,7 @@ export function ChatInterface({
                       
                       {/* Interaction Hint */}
                       {!isLoading && input.trim() && (
-                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-zinc-900 border border-white/10 rounded-md text-[8px] font-bold text-zinc-400 uppercase tracking-widest opacity-0 group-hover/send:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
+                        <div className="absolute -top-10 left-1/2 -translate-x-1/2 px-2 py-1 bg-[var(--bg-card)] border border-[var(--glass-border)] rounded-md text-[8px] font-bold text-[var(--text-secondary)] uppercase tracking-widest opacity-0 group-hover/send:opacity-100 transition-opacity pointer-events-none whitespace-nowrap">
                           ENTER TO EXECUTE
                         </div>
                       )}
@@ -905,12 +1002,12 @@ export function ChatInterface({
 
             {/* Context Awareness Layer */}
             <div className="mt-4 flex items-center justify-center gap-6">
-              <div className="flex items-center gap-2 text-[9px] font-bold text-zinc-600 uppercase tracking-[0.15em]">
+              <div className="flex items-center gap-2 text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.15em]">
                 <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
                 Logical Integrity Maintained
               </div>
-              <div className="h-3 w-px bg-white/5" />
-              <div className="flex items-center gap-2 text-[9px] font-bold text-zinc-600 uppercase tracking-[0.15em] hover:text-indigo-500 transition-colors cursor-help group/hint">
+              <div className="h-3 w-px bg-[var(--glass-border)]" />
+              <div className="flex items-center gap-2 text-[9px] font-bold text-[var(--text-secondary)] uppercase tracking-[0.15em] hover:text-indigo-500 transition-colors cursor-help group/hint">
                 <ShieldAlert className="w-3 h-3 opacity-40 group-hover/hint:opacity-100" />
                 Absolute Decisiveness Protocol Active
               </div>
@@ -1101,6 +1198,20 @@ export function ChatInterface({
           </div>
         </div>
       </aside>
+
+      <AnimatePresence>
+        {showNewsFeed && (
+          <motion.aside 
+            initial={{ x: 400, opacity: 0 }}
+            animate={{ x: 0, opacity: 1 }}
+            exit={{ x: 400, opacity: 0 }}
+            transition={{ type: "spring", damping: 30, stiffness: 300 }}
+            className="w-96 border-l border-black/5 dark:border-white/5 z-40 bg-white dark:bg-zinc-950 shadow-2xl"
+          >
+            <NewsFeed />
+          </motion.aside>
+        )}
+      </AnimatePresence>
 
     </div>
   );

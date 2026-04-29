@@ -99,6 +99,102 @@ interface MessageItemProps {
   onRewrite?: (id: string, content: string) => void;
 }
 
+function RationalMonitor({ report }: { report: any }) {
+  const [isOpen, setIsOpen] = useState(false);
+  
+  const indicators = [
+    { label: 'Toxicity', key: 'toxicity' },
+    { label: 'Gender', key: 'genderBias' },
+    { label: 'Race', key: 'racialBias' },
+    { label: 'Political', key: 'politicalBias' },
+    { label: 'Age', key: 'ageism' },
+    { label: 'Disability', key: 'ableism' },
+    { label: 'Social', key: 'socialBias' },
+    { label: 'Economic', key: 'economicBias' },
+    { label: 'Logical', key: 'logical' },
+    { label: 'Certainty', key: 'certainty' },
+  ];
+
+  const scores = report.indicator_scores_after || {};
+
+  return (
+    <div className="mt-4 border border-indigo-500/20 rounded-3xl overflow-hidden bg-indigo-500/5 backdrop-blur-3xl transition-all duration-500">
+      <button 
+        onClick={() => setIsOpen(!isOpen)}
+        className="w-full px-6 py-4 flex items-center justify-between text-[10px] font-black uppercase tracking-[0.2em] text-indigo-500 hover:bg-indigo-500/5 transition-all"
+      >
+        <div className="flex items-center gap-3">
+          <div className="w-2 h-2 rounded-full bg-emerald-500 animate-pulse" />
+          Rational Integrity Monitor Active
+        </div>
+        {isOpen ? <ChevronUp className="w-4 h-4" /> : <ChevronDown className="w-4 h-4" />}
+      </button>
+
+      <AnimatePresence>
+        {isOpen && (
+          <motion.div 
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: 'auto', opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="px-6 pb-6 overflow-hidden"
+          >
+            <div className="grid grid-cols-2 md:grid-cols-5 gap-3 mb-6">
+              {indicators.map((ind) => (
+                <div key={ind.key} className="bg-black/10 dark:bg-white/5 rounded-2xl p-3 border border-white/5">
+                  <div className="text-[8px] font-bold text-zinc-500 uppercase tracking-widest mb-1">{ind.label}</div>
+                  <div className="flex items-end gap-2">
+                    <span className={cn(
+                      "text-sm font-mono font-bold",
+                      (ind.key === 'logical' || ind.key === 'certainty') 
+                        ? (scores[ind.key] > 0.8 ? "text-emerald-400" : "text-amber-400")
+                        : (scores[ind.key] < 0.1 ? "text-emerald-400" : "text-rose-400")
+                    )}>
+                      {(scores[ind.key] * 100).toFixed(0)}%
+                    </span>
+                  </div>
+                  <div className="mt-2 h-1 w-full bg-white/5 rounded-full overflow-hidden">
+                    <div 
+                      className={cn(
+                        "h-full transition-all duration-1000",
+                        (ind.key === 'logical' || ind.key === 'certainty') 
+                          ? (scores[ind.key] > 0.8 ? "bg-emerald-500" : "bg-amber-500")
+                          : (scores[ind.key] < 0.1 ? "bg-emerald-500" : "bg-rose-500")
+                      )}
+                      style={{ width: `${scores[ind.key] * 100}%` }}
+                    />
+                  </div>
+                </div>
+              ))}
+            </div>
+
+            <div className="space-y-4">
+              <div>
+                <div className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-2">Diagnostic Summary</div>
+                <p className="text-xs text-[var(--text-secondary)] italic leading-relaxed">
+                  "{report.rationale_summary}"
+                </p>
+              </div>
+
+              {report.changes_made && report.changes_made.length > 0 && (
+                <div>
+                  <div className="text-[9px] font-black uppercase tracking-[0.2em] text-zinc-500 mb-2">Optimization Trace</div>
+                  <div className="flex flex-wrap gap-2">
+                    {report.changes_made.map((change: string, idx: number) => (
+                      <span key={idx} className="px-3 py-1 bg-indigo-500/10 text-indigo-500 text-[9px] font-bold uppercase rounded-lg border border-indigo-500/10">
+                        {change}
+                      </span>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </div>
+  );
+}
+
 export function MessageItem({ message, onDelete, onRewrite }: MessageItemProps) {
   const [showOriginal, setShowOriginal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
@@ -323,8 +419,18 @@ export function MessageItem({ message, onDelete, onRewrite }: MessageItemProps) 
             </div>
           )}
 
+          {isAssistant && message.optimizationReport && (
+            <RationalMonitor report={message.optimizationReport} />
+          )}
+
           {isAssistant && (
             <div className="flex items-center justify-end gap-3 mt-6 pt-6 border-t border-black/5 dark:border-white/5 opacity-0 group-hover:opacity-100 transition-all duration-500 translate-y-2 group-hover:translate-y-0">
+              {message.isCorrected && (
+                <div className="mr-auto flex items-center gap-2 text-[8px] font-black uppercase tracking-[0.2em] text-emerald-500">
+                  <div className="w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                  Optimized for Rationality
+                </div>
+              )}
               <button 
                 onClick={() => handleFeedback('up')}
                 className={cn(

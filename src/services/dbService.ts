@@ -202,6 +202,30 @@ export const dbService = {
     }
   },
 
+  async updateMessageBiasScores(messageId: string, biasScores: any): Promise<void> {
+    const path = `messages/${messageId}`;
+    try {
+      await updateDoc(doc(db, 'messages', messageId), {
+        biasScores: cleanObject(biasScores),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  },
+
+  async updateMessageOptimizationReport(messageId: string, report: any): Promise<void> {
+    const path = `messages/${messageId}`;
+    try {
+      await updateDoc(doc(db, 'messages', messageId), {
+        optimizationReport: cleanObject(report),
+        content: report.improved_response, // Auto-apply the improvement
+        isCorrected: true
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  },
+
   async hardDeleteMessage(messageId: string, descendantIds: string[]): Promise<void> {
     try {
       const batch = writeBatch(db);
