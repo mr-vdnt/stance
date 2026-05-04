@@ -20,11 +20,11 @@ export function BiasIndicator({ scores, className }: BiasIndicatorProps) {
         { label: "Racial Bias", score: scores.racialBias },
       ].map((item) => (
         <div key={item.label} className="space-y-1.5">
-          <div className="flex justify-between text-[9px] uppercase tracking-[0.1em] text-zinc-500 font-mono">
+          <div className="flex justify-between text-[9px] uppercase tracking-[0.1em] text-zinc-600 dark:text-zinc-400 font-mono">
             <span>{item.label}</span>
-            <span className="text-zinc-400">{item.score.toFixed(3)}</span>
+            <span className="text-zinc-500 dark:text-zinc-500 font-bold">{item.score.toFixed(3)}</span>
           </div>
-          <div className="h-1 w-full bg-zinc-900 rounded-full overflow-hidden">
+          <div className="h-1 w-full bg-black/5 dark:bg-zinc-800 rounded-full overflow-hidden">
             <motion.div
               initial={{ width: 0 }}
               animate={{ width: `${item.score * 100}%` }}

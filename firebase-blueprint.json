@@ -52,6 +52,24 @@
           }
         },
         "feedback": { "type": "string", "enum": ["up", "down", null] },
+        "suggestions": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "searchSuggestions": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "query": { "type": "string" },
+              "category": { "type": "string" },
+              "bias_type": { "type": "string" },
+              "bias_direction": { "type": "string" },
+              "confidence_score": { "type": "number" },
+              "reason": { "type": "string" }
+            }
+          }
+        },
         "createdAt": { "type": "string", "format": "date-time" }
       },
       "required": ["conversationId", "role", "content", "createdAt"]

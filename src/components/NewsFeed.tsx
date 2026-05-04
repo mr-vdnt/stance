@@ -24,14 +24,14 @@ export function NewsFeed() {
   }, []);
 
   return (
-    <div className="flex flex-col h-full bg-white/50 dark:bg-zinc-950/50 backdrop-blur-xl border-l border-white/10 dark:border-white/5 overflow-hidden">
-      <div className="p-6 border-b border-black/5 dark:border-white/5 flex items-center justify-between">
+    <div className="flex flex-col h-full bg-[var(--bg-app)] backdrop-blur-xl border-l border-[var(--border-color)] overflow-hidden">
+      <div className="p-6 border-b border-[var(--border-color)] flex items-center justify-between">
         <div className="flex items-center gap-3">
           <div className="p-2 bg-indigo-500/10 rounded-xl">
             <Newspaper className="w-5 h-5 text-indigo-500" />
           </div>
           <div>
-            <h2 className="text-sm font-black uppercase tracking-[0.2em] text-zinc-800 dark:text-zinc-200">Global Signal</h2>
+            <h2 className="text-sm font-black uppercase tracking-[0.2em] text-[var(--text-main)]">Global Signal</h2>
             <div className="flex items-center gap-2 mt-0.5">
               <div className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" />
               <span className="text-[10px] font-bold text-emerald-500 uppercase tracking-widest">Real-time Unbiased Feed</span>
@@ -39,21 +39,20 @@ export function NewsFeed() {
           </div>
         </div>
         <div className="flex items-center gap-2">
-          {isLoading && (
-            <span className="text-[10px] font-bold text-indigo-500 uppercase tracking-widest animate-pulse">
-              Syncing...
-            </span>
-          )}
           <button 
             onClick={fetchNews}
             disabled={isLoading}
             className={cn(
-              "flex items-center gap-2 px-3 py-1.5 rounded-full transition-all text-zinc-500 hover:bg-indigo-500/10 hover:text-indigo-500 border border-transparent hover:border-indigo-500/20",
-              isLoading && "cursor-not-allowed opacity-50"
+              "flex items-center gap-2 px-3 py-1.5 rounded-full transition-all border border-transparent",
+              isLoading 
+                ? "text-indigo-500 bg-indigo-500/10 border-indigo-500/20 cursor-not-allowed" 
+                : "text-zinc-500 dark:text-zinc-400 hover:bg-indigo-500/10 hover:text-indigo-500 hover:border-indigo-500/20"
             )}
           >
-            <span className="text-[10px] font-black uppercase tracking-widest">Refresh Feed</span>
-            <RefreshCw className={cn("w-3.5 h-3.5", isLoading && "animate-spin")} />
+            <span className="text-[10px] font-black uppercase tracking-widest">
+              {isLoading ? 'Syncing Feed' : 'Refresh Feed'}
+            </span>
+            <RefreshCw className={cn("w-3.5 h-3.5 transition-transform duration-500", isLoading && "animate-spin")} />
           </button>
         </div>
       </div>
@@ -63,7 +62,7 @@ export function NewsFeed() {
           {isLoading && articles.length === 0 ? (
             <div className="flex flex-col items-center justify-center h-full py-20 text-center">
               <Zap className="w-10 h-10 text-indigo-500/20 mb-4 animate-pulse" />
-              <p className="text-xs font-bold text-zinc-500 uppercase tracking-widest">Compiling diverse perspectives...</p>
+              <p className="text-xs font-bold text-zinc-600 dark:text-zinc-400 uppercase tracking-widest">Compiling diverse perspectives...</p>
             </div>
           ) : (
             articles.map((article, idx) => (
@@ -72,7 +71,7 @@ export function NewsFeed() {
                 initial={{ opacity: 0, y: 20 }}
                 animate={{ opacity: 1, y: 0 }}
                 transition={{ delay: idx * 0.1 }}
-                className="group relative flex flex-col gap-3 p-4 bg-white/40 dark:bg-zinc-900/40 rounded-3xl border border-black/5 dark:border-white/5 hover:border-indigo-500/30 transition-all duration-500"
+                className="group relative flex flex-col gap-3 p-4 bg-[var(--bg-secondary)] dark:bg-[var(--bg-card)] rounded-3xl border border-[var(--border-color)] hover:border-indigo-500/30 transition-all duration-500"
               >
                 <div className="flex items-center justify-between">
                   <span className="px-2 py-0.5 bg-indigo-500/10 text-indigo-500 text-[9px] font-black uppercase tracking-widest rounded-md border border-indigo-500/10">
@@ -85,7 +84,7 @@ export function NewsFeed() {
                   {article.title}
                 </h3>
 
-                <p className="text-xs text-zinc-500 dark:text-zinc-400 leading-relaxed line-clamp-3">
+                <p className="text-xs text-zinc-600 dark:text-zinc-400 leading-relaxed line-clamp-3">
                   {article.summary}
                 </p>
 
@@ -94,22 +93,25 @@ export function NewsFeed() {
                     <div className="w-4 h-4 rounded-full bg-zinc-200 dark:bg-zinc-800 flex items-center justify-center">
                       <Globe className="w-2.5 h-2.5 text-zinc-500" />
                     </div>
-                    <span className="text-[10px] font-black uppercase tracking-wider text-zinc-500">{article.source}</span>
+                    <span className="text-[10px] font-black uppercase tracking-wider text-zinc-600 dark:text-zinc-400">{article.source}</span>
                   </div>
                   
                   <div className="flex items-center gap-2">
-                    <div className="flex items-center gap-1 text-emerald-500">
-                      <ShieldCheck className="w-3 h-3" />
-                      <span className="text-[9px] font-black uppercase tracking-widest">Verified</span>
-                    </div>
+                    {article.is_verified && (
+                      <div className="flex items-center gap-1 text-emerald-500 bg-emerald-500/5 px-1.5 py-0.5 rounded-full border border-emerald-500/10">
+                        <ShieldCheck className="w-2.5 h-2.5" />
+                        <span className="text-[8px] font-black uppercase tracking-widest">Verified</span>
+                      </div>
+                    )}
                     {article.url && (
                       <a 
                         href={article.url} 
                         target="_blank" 
-                        rel="noreferrer"
-                        className="text-zinc-400 hover:text-indigo-500 transition-colors"
+                        rel="noopener noreferrer"
+                        className="p-1 px-2 rounded-lg bg-indigo-500/5 text-zinc-400 hover:text-indigo-500 hover:bg-indigo-500/10 transition-all border border-transparent hover:border-indigo-500/20"
+                        title="View Full Story"
                       >
-                        <ExternalLink className="w-3.5 h-3.5" />
+                        <ExternalLink className="w-3 h-3" />
                       </a>
                     )}
                   </div>
@@ -122,7 +124,7 @@ export function NewsFeed() {
 
       {lastUpdated && (
         <div className="p-4 border-t border-black/5 dark:border-white/5 text-center">
-          <p className="text-[9px] font-bold text-zinc-400 uppercase tracking-widest">
+          <p className="text-[9px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-widest">
             Last Synced: {lastUpdated.toLocaleTimeString()}
           </p>
         </div>

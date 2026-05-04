@@ -74,6 +74,8 @@ export interface Message {
   biasScores?: BiasScores;
   optimizationReport?: OptimizationReport;
   feedback?: 'up' | 'down' | null;
+  suggestions?: string[];
+  searchSuggestions?: SearchSuggestion[];
   isDeleted?: boolean;
   isGloballyDeleted?: boolean;
   deletedAt?: any;
@@ -83,6 +85,22 @@ export interface Message {
 }
 
 export type EthicalMode = 'utilitarian' | 'equal-value' | 'duty-based' | 'randomized' | 'interpretive';
+
+export interface SearchSuggestion {
+  query: string;
+  category: 'neutral' | 'mildly_biased' | 'strongly_biased';
+  bias_type: 'neutral' | 'framing_bias' | 'ideological_bias' | 'emotional_bias';
+  bias_direction: 'positive' | 'negative' | 'skeptical' | 'supportive' | 'critical' | 'none';
+  confidence_score: number;
+  reason: string;
+}
+
+export interface UserPersona {
+  interests: string[];
+  profession: string;
+  behaviorPatterns: string[];
+  intentClusters: string[];
+}
 
 export interface Conversation {
   id?: string;

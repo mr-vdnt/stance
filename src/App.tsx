@@ -132,7 +132,7 @@ export default function App() {
   const activeConversation = conversations.find(c => c.id === activeConversationId);
 
   return (
-    <main className="h-screen w-full flex items-center justify-center p-0 md:p-8 lg:p-12 relative overflow-hidden transition-all duration-700 bg-[var(--bg-app)]">
+    <main className="h-screen w-full flex items-center justify-center p-0 md:p-6 lg:p-10 relative overflow-hidden transition-all duration-700 bg-[var(--bg-app)]">
       {/* Background with subtle sophisticated texture */}
       <div className="absolute inset-0 pointer-events-none"></div>
       <div className="absolute top-0 left-0 w-full h-full opacity-20 dark:opacity-30 pointer-events-none" 
@@ -142,10 +142,11 @@ export default function App() {
       <div className="absolute top-[-10%] left-[-10%] w-[60%] h-[60%] rounded-full bg-indigo-500/5 blur-[120px] dark:bg-indigo-500/10 animate-pulse transition-all duration-700"></div>
       <div className="absolute bottom-[-10%] right-[-10%] w-[60%] h-[60%] rounded-full bg-cyan-500/5 blur-[120px] dark:bg-cyan-500/10 transition-all duration-700"></div>
 
-      <div className="w-full h-full max-w-7xl flex gap-10 relative z-10 animate-in fade-in zoom-in-95 duration-1000">
+ 
+      <div className="w-full h-full max-w-7xl flex gap-0 md:gap-6 lg:gap-10 relative z-10 animate-in fade-in zoom-in-95 duration-1000">
         {/* Sidebar - Desktop & Mobile Drawer */}
         <aside className={cn(
-          "w-80 glass-panel rounded-none md:rounded-[2.5rem] flex flex-col overflow-hidden transition-all duration-500 z-50",
+          "w-[85vw] max-w-[320px] lg:w-80 glass-panel rounded-none md:rounded-[2.5rem] flex flex-col overflow-hidden transition-transform duration-500 z-50",
           "fixed inset-y-0 left-0 lg:relative lg:translate-x-0 lg:flex",
           isMobileMenuOpen ? "translate-x-0" : "-translate-x-full"
         )}>
@@ -157,9 +158,9 @@ export default function App() {
               <div className="flex items-center gap-2">
                 <button 
                   onClick={() => setIsDarkMode(!isDarkMode)}
-                  className="p-2.5 rounded-2xl bg-white/5 border border-white/10 hover:bg-white/10 transition-all active:scale-90"
+                  className="p-2.5 rounded-2xl bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 hover:bg-black/10 dark:hover:bg-white/10 transition-all active:scale-90"
                 >
-                  {isDarkMode ? <Sun className="w-4 h-4 text-indigo-400" /> : <Moon className="w-4 h-4 text-zinc-400" />}
+                  {isDarkMode ? <Sun className="w-4 h-4 text-indigo-400" /> : <Moon className="w-4 h-4 text-zinc-500" />}
                 </button>
               </div>
             </div>
@@ -178,7 +179,7 @@ export default function App() {
           </div>
           
           <div className="flex-1 px-4 py-6 overflow-y-auto custom-scrollbar space-y-1.5 font-sans">
-            <span className="px-4 text-[10px] font-bold text-[var(--text-secondary)] uppercase tracking-widest mb-4 block opacity-60">Recent History</span>
+            <span className="px-4 text-[10px] font-bold text-zinc-600 dark:text-zinc-400 uppercase tracking-widest mb-4 block opacity-80">Recent History</span>
             {conversations.map((conv) => (
               <div
                 key={conv.id}
@@ -244,17 +245,6 @@ export default function App() {
             ))}
           </div>
 
-          <div className="p-8 border-t border-white/5 bg-black/5 dark:bg-white/2">
-            <div className="flex items-center gap-3 mb-4">
-              <div className="p-2 rounded-xl bg-green-500/10 text-green-500">
-                <Activity className="w-3.5 h-3.5" />
-              </div>
-              <div>
-                <p className="text-[10px] font-bold text-[var(--text-main)] uppercase tracking-widest">Active System</p>
-                <p className="text-[9px] text-zinc-500 font-mono">NEURAL_LINK: ONLINE</p>
-              </div>
-            </div>
-          </div>
         </aside>
 
         {/* Mobile Overlay */}
@@ -313,14 +303,14 @@ export default function App() {
 
                 <div className="w-full space-y-4">
                   <div className="space-y-1.5 flex flex-col items-start px-1">
-                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 opacity-60">Type "DELETE" to acknowledge</label>
+                    <label className="text-[10px] font-bold uppercase tracking-widest text-zinc-500 dark:text-zinc-500 opacity-80">Type "DELETE" to acknowledge</label>
                     <input 
                       autoFocus
                       type="text" 
                       value={deleteModal.confirmText}
                       onChange={(e) => setDeleteModal(prev => ({ ...prev, confirmText: e.target.value }))}
                       placeholder="Verification required"
-                      className="w-full bg-black/20 border border-white/5 rounded-xl px-4 py-3 text-sm focus:border-rose-500/50 outline-none transition-all placeholder:text-zinc-600"
+                      className="w-full bg-black/5 dark:bg-white/5 border border-black/10 dark:border-white/10 rounded-xl px-4 py-3 text-sm focus:border-rose-500/50 outline-none transition-all placeholder:text-zinc-500"
                     />
                   </div>
 

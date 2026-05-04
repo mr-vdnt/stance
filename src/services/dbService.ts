@@ -226,6 +226,28 @@ export const dbService = {
     }
   },
 
+  async updateMessageSuggestions(messageId: string, suggestions: string[]): Promise<void> {
+    const path = `messages/${messageId}`;
+    try {
+      await updateDoc(doc(db, 'messages', messageId), {
+        suggestions: cleanObject(suggestions),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  },
+
+  async updateMessageSearchSuggestions(messageId: string, searchSuggestions: any[]): Promise<void> {
+    const path = `messages/${messageId}`;
+    try {
+      await updateDoc(doc(db, 'messages', messageId), {
+        searchSuggestions: cleanObject(searchSuggestions),
+      });
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
+    }
+  },
+
   async hardDeleteMessage(messageId: string, descendantIds: string[]): Promise<void> {
     try {
       const batch = writeBatch(db);

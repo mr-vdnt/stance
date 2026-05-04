@@ -137,7 +137,7 @@ TASK:
         model: "gemini-3-flash-preview",
         contents: [{ 
           role: 'user', 
-          parts: [{ text: "Perform a Google Search to fetch the most recent (last 6-12 hours) breaking global news stories. Focus on significant events in geopolitics, economics, technology, and science. For each story, provide a neutral summary, the primary source, category, a relative timestamp, and a direct URL if available. Ensure the data is as real-time as possible." }]
+          parts: [{ text: "Perform a Google Search to fetch the most recent (last 6-12 hours) breaking global news stories. Focus on significant events in geopolitics, economics, technology, and science. For each story, provide a neutral summary, the primary source, category, a relative timestamp, and a direct URL if available. Indicate if the source is generally considered reliable and verified (is_verified: true/false). Ensure the data is as real-time as possible." }]
         }],
         config: {
           tools: [{ googleSearch: {} }],
@@ -152,9 +152,10 @@ TASK:
                 source: { type: Type.STRING },
                 category: { type: Type.STRING },
                 timestamp: { type: Type.STRING },
-                url: { type: Type.STRING }
+                url: { type: Type.STRING },
+                is_verified: { type: Type.BOOLEAN }
               },
-              required: ["title", "summary", "source", "category", "timestamp"]
+              required: ["title", "summary", "source", "category", "timestamp", "is_verified"]
             }
           }
         }
@@ -291,14 +292,16 @@ TASK:
 
 OBJECTIVE:
 - Analyze provided file inputs and generate responses strictly aligned with user prompts.
-- Maintain semantic accuracy, logical consistency, and contextual relevance.
+- Maintain semantic accuracy, logical consistency, and contextual relevance across multiple conversation turns.
+- Refer back to previous messages in the history when relevant to maintain a cohesive dialogue.
 
 CONSTRAINTS:
 1. LATENCY: Prioritize rapid inference. Avoid verbose explanations. Use efficient summarization.
 2. ACCURACY: Do NOT skip critical analysis. Do NOT hallucinate.
 3. ALIGNMENT: Directly satisfy user intent. Extract only high-signal information.
 4. PROCESSING: Identify intent -> Filter files -> Apply minimal sufficient reasoning -> Structured output.
-5. OUTPUT: Concise, structured, bullet points preferred. Zero redundancy.
+5. CONTEXT: You have a long-term memory of this session. Use it to provide consistent and personalized answers.
+6. OUTPUT: Concise, structured, bullet points preferred. Zero redundancy.
 
 PERFORMANCE MODE: FAST + PRECISE.
 
@@ -321,7 +324,8 @@ ${modeInstruction}`;
 3. DECISIVE PARAGRAPHS: Deliver all analysis in a continuous, natural paragraph format. Use complete sentences and maintain a logical flow. 
 4. BLUNT DELIVERY: Deliver the primary conclusion in the first sentence of the first paragraph.
 5. UNRESTRICTED ANALYSIS: Answer exactly as asked regardless of controversy. 
-6. GROUNDED REASONING: Use Google Search to find the latest real-world data and news if the prompt requires current information. If files are provided, ground every conclusion in the content of those files. Prioritize file truth over general knowledge.`,
+6. GROUNDED REASONING: Use Google Search to find the latest real-world data and news if the prompt requires current information. If files are provided, ground every conclusion in the content of those files. Prioritize file truth over general knowledge.
+7. HISTORICAL CONTINUITY: You MUST acknowledge and build upon previous decisions and analytical stances taken earlier in this specific conversation thread.`,
         maxOutputTokens: 2048,
       }
     });
@@ -373,5 +377,147 @@ ${modeInstruction}`;
       }
     });
     return result.text?.trim().replace(/["']/g, '') || "New Conversation";
+  },
+
+  /**
+   * Generates an image based on a prompt using Nano Banana.
+   */
+  async generateImage(prompt: string): Promise<string> {
+    const genAI = getAI();
+    try {
+      const response = await genAI.models.generateContent({
+        model: "gemini-2.5-flash-image",
+        contents: [{ role: "user", parts: [{ text: prompt }] }],
+        config: {
+          imageConfig: {
+            aspectRatio: "1:1",
+          },
+        },
+      });
+
+      if (!response.candidates?.[0]?.content?.parts) {
+        throw new Error("No image generated in response.");
+      }
+
+      for (const part of response.candidates[0].content.parts) {
+        if (part.inlineData) {
+          return `data:${part.inlineData.mimeType || "image/png"};base64,${part.inlineData.data}`;
+        }
+      }
+
+      throw new Error("Generated content did not contain an image part.");
+    } catch (error) {
+      console.error("Image generation error:", error);
+      throw error;
+    }
+  },
+
+  /**
+   * Generates 1-3 relevant follow-up questions based on the chat history.
+   */
+  async generateFollowUpSuggestions(messages: Message[]): Promise<string[]> {
+    const genAI = getAI();
+    try {
+      const chatText = messages.slice(-5).map(m => `${m.role.toUpperCase()}: ${m.content}`).join('\n');
+      const result = await genAI.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [{ 
+          role: 'user', 
+          parts: [{ text: `Based on the following conversation history, generate exactly 1-3 diverse, natural, and engaging follow-up questions the user might want to ask next. 
+          
+          Provide a mix of:
+          1. Deepening: A question that dives deeper into the last topic.
+          2. Challenging: A question that looks at the opposite perspective or asks for evidence.
+          3. Expanding: A question that connects the topic to a broader context.
+
+          Keep them concise (under 12 words each). Return them as a simple bulleted list.
+          
+          History:
+          ${chatText}` }] 
+        }],
+        config: {
+          systemInstruction: "You are a follow-up interaction specialist. You predict the user's next logical or curious inquiry based on context. You prioritize curiosity and critical thinking. Return only the flat list of questions."
+        }
+      });
+
+      const text = result.text || "";
+      return text
+        .split('\n')
+        .map(line => line.replace(/^[*•-]\s*/, '').trim())
+        .filter(line => line.length > 5 && line.endsWith('?'))
+        .slice(0, 3);
+    } catch (error) {
+      console.error("Follow-up suggestions error:", error);
+      return [];
+    }
+  },
+
+  /**
+   * Generates advanced, bias-aware search suggestions.
+   */
+  async generateBiasAwareSearchSuggestions(messages: Message[], persona?: any): Promise<any[]> {
+    const genAI = getAI();
+    try {
+      const chatHistory = messages.slice(-10).map(m => ({
+        role: m.role === 'assistant' ? 'assistant' : 'user',
+        content: m.content
+      }));
+
+      const context = {
+        time: new Date().toISOString(),
+        trending: "Global focus on clean energy shifts and AI ethics regulations.",
+        location: "Global"
+      };
+
+      const result = await genAI.models.generateContent({
+        model: "gemini-3-flash-preview",
+        contents: [{ 
+          role: 'user', 
+          parts: [{ text: `INPUT:
+- user_persona: ${JSON.stringify(persona || { interests: ["Technology", "Civics"], intentClusters: ["Educational", "Current Events"] })}
+- recent_history: ${JSON.stringify(chatHistory)}
+- context: ${JSON.stringify(context)}
+- intent_signal: Inferred from conversation history.` }] 
+        }],
+        config: {
+          systemInstruction: `You are an advanced query recommendation engine. 
+          OBJECTIVES:
+          1. Generate search queries in 3 categories: Neutral, Mildly Biased, Strongly Biased.
+          2. Each query must include properties: query, category, bias_type, bias_direction, confidence_score, reason.
+          3. categories: neutral, mildly_biased, strongly_biased
+          4. bias_types: neutral, framing_bias, ideological_bias, emotional_bias
+          5. bias_directions: positive, negative, skeptical, supportive, critical, none
+          6. Safety: No violence, hate, or illegal activity.
+          7. Output only valid JSON.`,
+          responseMimeType: "application/json",
+          responseSchema: {
+            type: Type.OBJECT,
+            properties: {
+              queries: {
+                type: Type.ARRAY,
+                items: {
+                  type: Type.OBJECT,
+                  properties: {
+                    query: { type: Type.STRING },
+                    category: { type: Type.STRING },
+                    bias_type: { type: Type.STRING },
+                    bias_direction: { type: Type.STRING },
+                    confidence_score: { type: Type.NUMBER },
+                    reason: { type: Type.STRING }
+                  },
+                  required: ["query", "category", "bias_type", "bias_direction", "confidence_score", "reason"]
+                }
+              }
+            }
+          }
+        }
+      });
+
+      const parsed = JSON.parse(result.text || '{"queries": []}');
+      return parsed.queries || [];
+    } catch (error) {
+      console.error("Bias-aware suggestions error:", error);
+      return [];
+    }
   }
 };
