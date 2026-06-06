@@ -85,6 +85,21 @@
         "comment": { "type": "string" },
         "createdAt": { "type": "string", "format": "date-time" }
       }
+    },
+    "User": {
+      "title": "User",
+      "description": "User persona and system preferences",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string" },
+        "bio": { "type": "string" },
+        "profession": { "type": "string" },
+        "defaultBiasThreshold": { "type": "number" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "updatedAt"]
     }
   },
   "firestore": {
@@ -99,6 +114,10 @@
     "feedback": {
       "schema": "AppFeedback",
       "description": "Feedback logs for model tuning"
+    },
+    "users": {
+      "schema": "User",
+      "description": "User persona settings"
     }
   }
 }

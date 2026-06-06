@@ -69,6 +69,7 @@ export interface Message {
   role: 'user' | 'assistant';
   content: string;
   originalContent?: string;
+  modelName?: string;
   attachments?: Attachment[];
   isCorrected?: boolean;
   biasScores?: BiasScores;
@@ -100,6 +101,7 @@ export interface UserPersona {
   profession: string;
   behaviorPatterns: string[];
   intentClusters: string[];
+  defaultBiasThreshold?: number;
 }
 
 export interface Conversation {
@@ -108,6 +110,7 @@ export interface Conversation {
   title: string;
   preferredModel?: string;
   ethicalMode?: EthicalMode;
+  biasThreshold?: number; // 0 to 1, where 0 is most sensitive
   createdAt: any;
   updatedAt: any;
 }

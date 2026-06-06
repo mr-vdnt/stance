@@ -1,10 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, memo } from 'react';
 import { motion, AnimatePresence } from 'motion/react';
 import { Newspaper, RefreshCw, ExternalLink, Globe, Zap, ShieldCheck } from 'lucide-react';
 import { aiService } from '../services/aiService';
 import { cn } from '../lib/utils';
 
-export function NewsFeed() {
+export const NewsFeed = memo(() => {
   const [articles, setArticles] = useState<any[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [lastUpdated, setLastUpdated] = useState<Date | null>(null);
@@ -131,4 +131,4 @@ export function NewsFeed() {
       )}
     </div>
   );
-}
+});

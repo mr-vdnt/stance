@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, memo } from 'react';
 import { 
   BarChart, 
   Bar, 
@@ -17,14 +17,15 @@ import {
 import { analyticsService, AnalyticsData } from '../services/analyticsService';
 import { motion } from 'motion/react';
 import { cn } from '../lib/utils';
-import { LayoutDashboard, TrendingUp, Users, MessageSquare, Activity, ChevronRight, Filter, Download, Calendar } from 'lucide-react';
+import { LayoutDashboard, TrendingUp, Users, MessageSquare, Activity, ChevronRight, Filter, Download, Calendar, User as UserCircle } from 'lucide-react';
+import { DistributionBarChart } from './Visualizations';
 
 interface DashboardProps {
   userId: string;
   onClose: () => void;
 }
 
-export function Dashboard({ userId, onClose }: DashboardProps) {
+export const Dashboard = memo(({ userId, onClose }: DashboardProps) => {
   const [data, setData] = useState<AnalyticsData | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'overview' | 'trends' | 'topics'>('overview');
@@ -63,10 +64,10 @@ export function Dashboard({ userId, onClose }: DashboardProps) {
     <motion.div 
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
-      className="fixed inset-0 bg-[#E4E3E0] dark:bg-zinc-950 z-[100] flex flex-col overflow-hidden"
+      className="fixed inset-0 bg-[#F8FAFC] dark:bg-[#090A0F] z-[100] flex flex-col overflow-hidden"
     >
       {/* Header - Mission Control Style */}
-      <header className="h-14 md:h-16 border-b border-black/10 dark:border-white/10 flex items-center justify-between px-4 md:px-8 bg-white/50 dark:bg-black/50 backdrop-blur-md sticky top-0 z-10">
+      <header className="h-14 md:h-16 border-b border-black/[0.03] dark:border-white/[0.03] flex items-center justify-between px-4 md:px-8 bg-white/60 dark:bg-zinc-900/60 backdrop-blur-2xl sticky top-0 z-10">
         <div className="flex items-center gap-3 md:gap-4 shrink-0">
           <div className="p-1.5 md:p-2 bg-indigo-600 rounded-lg">
             <LayoutDashboard className="w-4 h-4 md:w-5 md:h-5 text-white" />
@@ -104,7 +105,7 @@ export function Dashboard({ userId, onClose }: DashboardProps) {
       </header>
 
       {/* Main Content Area */}
-      <main className="flex-1 overflow-y-auto p-4 md:p-8 font-sans">
+      <main className="flex-1 overflow-y-auto p-4 md:p-8 font-sans bg-transparent">
         <div className="max-w-7xl mx-auto space-y-4 md:space-y-8">
           
           {/* Key Stats Row */}
@@ -117,6 +118,23 @@ export function Dashboard({ userId, onClose }: DashboardProps) {
 
           {activeTab === 'overview' && (
             <div className="grid grid-cols-1 lg:grid-cols-3 gap-6 lg:gap-8">
+              {/* Message Role Distribution */}
+              <div className="lg:col-span-1">
+                <DashboardSection title="Message Dynamics" description="Distribution of dialogue interaction" icon={<UserCircle className="w-4 h-4 text-white" />}>
+                  <div className="mt-6 flex flex-col items-center">
+                    <DistributionBarChart data={data.roleDistribution} className="mt-4" color="#6366f1" />
+                    <div className="w-full grid grid-cols-2 gap-4 mt-6">
+                      {data.roleDistribution.map((role, i) => (
+                        <div key={role.label} className="p-4 rounded-2xl bg-black/[0.02] dark:bg-white/[0.02] border border-black/5 dark:border-white/5 flex flex-col">
+                          <span className="text-[10px] font-black uppercase tracking-widest text-zinc-500 mb-1">{role.label}</span>
+                          <span className="text-xl font-black text-indigo-500">{role.value}</span>
+                        </div>
+                      ))}
+                    </div>
+                  </div>
+                </DashboardSection>
+              </div>
+
               {/* Engagement Chart - Spans 2 columns on lg */}
               <div className="lg:col-span-2">
                 <DashboardSection title="Engagement Trajectory" description="Message volume across temporal axis" icon={<TrendingUp className="w-4 h-4 text-white" />}>
@@ -269,9 +287,9 @@ export function Dashboard({ userId, onClose }: DashboardProps) {
       </main>
     </motion.div>
   );
-}
+});
 
-function StatCard({ label, value, icon, color }: { label: string, value: string | number, icon: React.ReactNode, color: string }) {
+const StatCard = memo(({ label, value, icon, color }: { label: string, value: string | number, icon: React.ReactNode, color: string }) => {
   return (
     <div className="bg-white dark:bg-zinc-900 p-4 md:p-6 rounded-[1.5rem] md:rounded-[2.5rem] border border-black/10 dark:border-white/10 shadow-sm hover:shadow-xl transition-all duration-500 group overflow-hidden relative">
       <div className="absolute top-0 right-0 p-4 opacity-[0.03] dark:opacity-[0.05] group-hover:scale-150 transition-transform duration-700 pointer-events-none">
@@ -288,9 +306,9 @@ function StatCard({ label, value, icon, color }: { label: string, value: string 
       <div className="h-0.5 w-8 bg-current opacity-20 rounded-full" />
     </div>
   );
-}
+});
 
-function DashboardSection({ title, description, icon, children }: { title: string, description: string, icon: React.ReactNode, children: React.ReactNode }) {
+const DashboardSection = memo(({ title, description, icon, children }: { title: string, description: string, icon: React.ReactNode, children: React.ReactNode }) => {
   return (
     <div className="bg-white dark:bg-zinc-900 rounded-[1.5rem] md:rounded-[2.5rem] border border-black/10 dark:border-white/10 p-5 md:p-8 shadow-sm">
       <div className="flex items-center justify-between mb-6">
@@ -308,4 +326,4 @@ function DashboardSection({ title, description, icon, children }: { title: strin
       {children}
     </div>
   );
-}
+});

@@ -28,13 +28,13 @@ interface BiasRadarChartProps {
 export function BiasRadarChart({ scores, previousScores, className }: BiasRadarChartProps) {
   const data = [
     { subject: 'Toxicity', A: scores.toxicity, B: previousScores?.toxicity ?? scores.toxicity, fullMark: 1 },
-    { subject: 'Gender', A: scores.genderBias, B: previousScores?.genderBias ?? scores.genderBias, fullMark: 1 },
-    { subject: 'Race', A: scores.racialBias, B: previousScores?.racialBias ?? scores.racialBias, fullMark: 1 },
+    { subject: 'Gender Bias', A: scores.genderBias, B: previousScores?.genderBias ?? scores.genderBias, fullMark: 1 },
+    { subject: 'Racial Bias', A: scores.racialBias, B: previousScores?.racialBias ?? scores.racialBias, fullMark: 1 },
     { subject: 'Political', A: scores.politicalBias, B: previousScores?.politicalBias ?? scores.politicalBias, fullMark: 1 },
-    { subject: 'Age', A: scores.ageism, B: previousScores?.ageism ?? scores.ageism, fullMark: 1 },
+    { subject: 'Ageism', A: scores.ageism, B: previousScores?.ageism ?? scores.ageism, fullMark: 1 },
     { subject: 'Logical', A: scores.logical, B: previousScores?.logical ?? scores.logical, fullMark: 1 },
-    { subject: 'Social', A: scores.socialBias, B: previousScores?.socialBias ?? scores.socialBias, fullMark: 1 },
-    { subject: 'Economic', A: scores.economicBias, B: previousScores?.economicBias ?? scores.economicBias, fullMark: 1 },
+    { subject: 'Ableism', A: scores.ableism, B: previousScores?.ableism ?? scores.ableism, fullMark: 1 },
+    { subject: 'Social/Econ', A: ((scores.socialBias || 0) + (scores.economicBias || 0)) / 2, B: (((previousScores?.socialBias ?? scores.socialBias) || 0) + ((previousScores?.economicBias ?? scores.economicBias) || 0)) / 2, fullMark: 1 },
   ];
 
   return (

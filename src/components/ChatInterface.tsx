@@ -1,13 +1,13 @@
 import { useState, useEffect, useRef } from "react";
 import { Send, Loader2, ShieldAlert, Cpu, LogIn, LogOut, User as UserIcon, Layers, Upload, Camera, Mic, Paperclip, ChevronRight, AlertCircle, Trash2, Edit2, Sun, Moon, RotateCcw, X, FileText, Image as ImageIcon, Video, Music, Newspaper, Activity, Zap, Sparkles, Plus, LayoutDashboard, Settings, Eye } from "lucide-react";
-import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User } from "firebase/auth";
+import { signInWithPopup, GoogleAuthProvider, signOut, onAuthStateChanged, User, signInAnonymously, linkWithPopup, GoogleAuthProvider as GoogleProvider } from "firebase/auth";
 import { auth } from "../lib/firebase";
 import { Message, Attachment } from "../types";
 import { aiService } from "../services/aiService";
 import { dbService } from "../services/dbService";
 import { UserProfileModal } from "./UserProfileModal";
 import { CameraCapture } from "./CameraCapture";
-import { uploadFile } from "../services/storageService";
+import { uploadFile, uploadBase64Image } from "../services/storageService";
 import { MessageItem } from "./MessageItem";
 import { NewsFeed } from "./NewsFeed";
 import { Dashboard } from "./Dashboard";
@@ -58,6 +58,8 @@ export function ChatInterface({
   const [input, setInput] = useState("");
   const [isLoading, setIsLoading] = useState(false);
   const [selectedModel, setSelectedModel] = useState(MODELS[0].id);
+  const [biasThreshold, setBiasThreshold] = useState(0.5);
+  const [userPersona, setUserPersona] = useState<any>(null);
   const [streamingText, setStreamingText] = useState<string | null>(null);
   const [ethicalMode, setEthicalMode] = useState<typeof ETHICAL_MODES[number]['id']>('utilitarian');
   const [error, setError] = useState<string | null>(null);
@@ -75,12 +77,114 @@ export function ChatInterface({
   const [showCamera, setShowCamera] = useState(false);
   const [viewingMessageId, setViewingMessageId] = useState<string | null>(null);
   const [isListening, setIsListening] = useState(false);
-  const [aiGenConfig, setAiGenConfig] = useState<{ isOpen: boolean, type: 'image' | 'video' }>({ isOpen: false, type: 'image' });
-  const [aiPrompt, setAiPrompt] = useState("");
+  const [aiGenConfig, setAiGenConfig] = useState<{ 
+    isOpen: boolean, 
+    type: 'image' | 'video',
+    style?: string,
+    lighting?: string,
+    camera?: string,
+    mood?: string
+  }>({ 
+    isOpen: false, 
+    type: 'image',
+    style: 'Cinematic',
+    lighting: 'Golden Hour',
+    camera: 'Portrait',
+    mood: 'Dramatic'
+  });
+  const [isGenMode, setIsGenMode] = useState(false);
+  const [voiceTranscript, setVoiceTranscript] = useState("");
   const [isGeneratingAI, setIsGeneratingAI] = useState(false);
+  const [aiPrompt, setAiPrompt] = useState("");
   const [isAttachmentsMenuOpen, setIsAttachmentsMenuOpen] = useState(false);
   const [isActionsExpanded, setIsActionsExpanded] = useState(false);
   const recognitionRef = useRef<any>(null);
+
+  const formatErrorMessage = (err: any) => {
+    if (!err) return "Analytical interruption detected.";
+    
+    // Handle common Firebase Auth errors directly
+    if (err.code === 'auth/popup-closed-by-user' || err.code === 'auth/cancelled-popup-request') {
+      return "Identity Verification Aborted: The authentication window was closed before completion.";
+    }
+
+    if (err.code === 'auth/admin-restricted-operation' || 
+        err.code === 'auth/operation-not-allowed' ||
+        (typeof err.message === 'string' && (err.message.includes('auth/admin-restricted-operation') || err.message.includes('auth/operation-not-allowed')))) {
+      return "Protocol Restriction: Please enable Anonymous Authentication in the Firebase Console (Authentication > Sign-in method).";
+    }
+
+    if (typeof err.message === 'string' && err.message.includes('Neural Key Missing')) {
+      return "Hardware Failure: Neural Key (GEMINI_API_KEY) is missing. Configure it in the Project Secrets panel to enable AI intelligence.";
+    }
+
+    if (typeof err.message === 'string' && err.message.includes('WebSocket')) {
+      return "Network Instability: A sync channel was interrupted. Retrying protocol...";
+    }
+
+    // Convert to string safely
+    let errorMessage = "";
+    if (typeof err === 'string') {
+      errorMessage = err;
+    } else if (err.message) {
+      errorMessage = err.message;
+    } else {
+      try {
+        errorMessage = JSON.stringify(err);
+      } catch (e) {
+        errorMessage = "Identity synchronization failure.";
+      }
+    }
+    
+    // Handle Firestore JSON errors from dbService
+    if (errorMessage.startsWith('{') && errorMessage.includes('operationType')) {
+      try {
+        const dbError = JSON.parse(errorMessage);
+        const op = dbError.operationType?.toUpperCase() || "ACCESS";
+        
+        if (dbError.error?.includes('permission-denied') || dbError.error?.includes('insufficient permissions')) {
+          return `Clearance Failure [${op}]: Logical scope boundaries restricted by protocol.`;
+        }
+        if (dbError.error?.includes('admin-restricted-operation')) {
+          return "Configuration Required: Anonymous Authentication must be enabled in the Firebase Console Settings.";
+        }
+        if (dbError.error?.includes('quota-exceeded')) {
+          return "Resource Exhaustion: Neural database quota reached. Protocol suspended until reset.";
+        }
+        if (dbError.error?.includes('offline')) {
+          return "Translink Disconnect: Database unreachable. Verify connectivity.";
+        }
+        return `Divergent Data Trace [${op}]: ${dbError.error}`;
+      } catch (e) {
+        // Fallback
+      }
+    }
+
+    // Handle AI Safety/SDK errors
+    const normalized = errorMessage.toUpperCase();
+    if (normalized.includes('SAFETY') || normalized.includes('BLOCKED')) {
+      return "Containment Triggered: Query violates safety alignment vectors.";
+    }
+    if (normalized.includes('RECITATION')) {
+      return "Copyright Matrix: Output suppressed to maintain IP integrity.";
+    }
+    if (normalized.includes('QUOTA') || normalized.includes('429')) {
+      return "Intelligence Loop Saturation: Processing limits exceeded. Recalibrating...";
+    }
+    if (normalized.includes('API KEY') || normalized.includes('NOT DEFINED')) {
+      return "Neural Key Missing: AI Service configuration invalid.";
+    }
+    if (normalized.includes('FETCH') || normalized.includes('NETWORK') || normalized.includes('TIMEOUT')) {
+      return "Downlink Interruption: Data stream fragmented. Re-establish sync.";
+    }
+
+    // Default formatting for generic system messages
+    if (errorMessage.length > 120) {
+      return `Protocol Anomaly: ${errorMessage.substring(0, 100)}...`;
+    }
+
+    return errorMessage;
+  };
   
   const fileInputRef = useRef<HTMLInputElement>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -162,10 +266,11 @@ export function ChatInterface({
   } : null;
 
   const lastAssistantMessage = [...messages].reverse().find(m => m.role === 'assistant' && !m.isDeleted);
+  const lastAssistantScores = lastAssistantMessage ? (lastAssistantMessage.biasScores || lastAssistantMessage.optimizationReport?.indicator_scores_after) : null;
   
   const targetMessage = viewingMessageId ? messages.find(m => m.id === viewingMessageId) : null;
-  const targetBiasScores = targetMessage ? (targetMessage.biasScores || targetMessage.optimizationReport?.indicator_scores_after) : biasScores;
-  const targetOptimizationReport = targetMessage?.optimizationReport;
+  const targetBiasScores = targetMessage ? (targetMessage.biasScores || targetMessage.optimizationReport?.indicator_scores_after) : (lastAssistantScores || biasScores);
+  const targetOptimizationReport = targetMessage?.optimizationReport || (!viewingMessageId ? lastAssistantMessage?.optimizationReport : null);
 
   // Normalization helper (Largest Remainder Method) to ensure scores sum to exactly 100%
   const getRoundedPercentages = (vals: number[], targetSum: number = 100) => {
@@ -242,6 +347,16 @@ export function ChatInterface({
     
     const unsubscribe = onAuthStateChanged(auth, (u) => {
       setUser(u);
+      if (u) {
+        dbService.getUserPersona(u.uid).then(persona => {
+          setUserPersona(persona);
+          if (persona?.defaultBiasThreshold !== undefined) {
+             setBiasThreshold(persona.defaultBiasThreshold);
+          }
+        });
+      } else {
+        setUserPersona(null);
+      }
     });
     return () => {
       unsubscribe();
@@ -269,6 +384,7 @@ export function ChatInterface({
           if (current) {
             if (current.preferredModel) setSelectedModel(current.preferredModel);
             if (current.ethicalMode) setEthicalMode(current.ethicalMode);
+            if (current.biasThreshold !== undefined) setBiasThreshold(current.biasThreshold);
             if (current.title) setCurrentTitle(current.title);
           }
         } catch (err) {
@@ -288,25 +404,51 @@ export function ChatInterface({
     
     setIsAuthenticating(true);
     setError(null);
-    const provider = new GoogleAuthProvider();
+    const provider = new GoogleProvider();
     try {
-      await signInWithPopup(auth, provider);
+      if (user && user.isAnonymous) {
+        // Link anonymous account to Google
+        await linkWithPopup(user, provider);
+        // Display name and photo might not update automatically on the user object in state immediately
+        // but onAuthStateChanged will trigger.
+      } else {
+        await signInWithPopup(auth, provider);
+      }
     } catch (err: any) {
       if (err.code === 'auth/popup-blocked') {
         setError("AUTHENTICATION BLOCKED: Please enable popups for this site or open the app in a NEW TAB to continue.");
-      } else if (err.code === 'auth/cancelled-popup-request') {
-        // Silently handle cancelled request
-        console.log("Auth popup request cancelled.");
-      } else if (err.code === 'auth/popup-closed-by-user') {
-        // Silently handle user closing popup
+      } else if (err.code === 'auth/credential-already-in-use') {
+        // Handle case where Google account is already linked to another Firebase user
+        // In this case, we have to sign in with the Google account, but we'll lose guest data unless we merge (complex)
+        // For now, let's just sign in.
+        await signInWithPopup(auth, provider);
       } else {
-        setError(err.message || "Failed to establish secure link.");
+        setError(formatErrorMessage(err));
       }
       console.error("Login failed:", err);
     } finally {
       setIsAuthenticating(false);
     }
   };
+
+  const handleGuestLogin = async () => {
+    if (isAuthenticating) return;
+    setIsAuthenticating(true);
+    setError(null);
+    try {
+      await signInAnonymously(auth);
+    } catch (err: any) {
+      setError(formatErrorMessage(err));
+      console.error("Guest error:", err);
+    } finally {
+      setIsAuthenticating(false);
+    }
+  };
+
+  useEffect(() => {
+    (window as any).triggerUpgrade = handleLogin;
+    return () => { delete (window as any).triggerUpgrade; };
+  }, [handleLogin]);
 
   const handleLogout = async () => {
     await signOut(auth);
@@ -399,14 +541,24 @@ export function ChatInterface({
         if (assistantMsgId && report) dbService.updateMessageOptimizationReport(assistantMsgId, report);
       });
 
+      // Background suggested inquiries
+      aiService.generateFollowUpSuggestions([...historyToUse.slice(0, actualAssistantIdx), { role: 'assistant', content: finalFullText } as Message]).then(suggestions => {
+        if (assistantMsgId && suggestions.length > 0) dbService.updateMessageSuggestions(assistantMsgId, suggestions);
+      });
+
+      // Background search recommendations
+      aiService.generateBiasAwareSearchSuggestions([...historyToUse.slice(0, actualAssistantIdx), { role: 'assistant', content: finalFullText } as Message]).then(searchSugs => {
+        if (assistantMsgId && searchSugs.length > 0) dbService.updateMessageSearchSuggestions(assistantMsgId, searchSugs);
+      });
+
       // Update title with new context
       const updatedHistory = [...historyToUse.slice(0, actualAssistantIdx), { role: 'assistant', content: finalFullText } as Message];
       const newTitle = await aiService.generateTitleFromHistory(updatedHistory);
       await dbService.updateConversationTitle(activeConversationId, newTitle);
       
-    } catch (err) {
+    } catch (err: any) {
       console.error("Regeneration Error:", err);
-      setError("Regeneration Failure: Failed to reconstruct rational response.");
+      setError(formatErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -479,6 +631,16 @@ export function ChatInterface({
         if (assistantMsgId && report) dbService.updateMessageOptimizationReport(assistantMsgId, report);
       });
 
+      // Background suggested inquiries
+      aiService.generateFollowUpSuggestions([...historyToUse, { role: 'user', content: newContent } as Message, { role: 'assistant', content: finalFullText } as Message]).then(suggestions => {
+        if (assistantMsgId && suggestions.length > 0) dbService.updateMessageSuggestions(assistantMsgId, suggestions);
+      });
+
+      // Background search recommendations
+      aiService.generateBiasAwareSearchSuggestions([...historyToUse, { role: 'user', content: newContent } as Message, { role: 'assistant', content: finalFullText } as Message]).then(searchSugs => {
+        if (assistantMsgId && searchSugs.length > 0) dbService.updateMessageSearchSuggestions(assistantMsgId, searchSugs);
+      });
+
       // 5. Sync Rational Monitor (happens automatically via subscription)
       
       // 6. Update title
@@ -486,8 +648,8 @@ export function ChatInterface({
       const newTitle = await aiService.generateTitleFromHistory(updatedHistory);
       await dbService.updateConversationTitle(activeConversationId, newTitle);
 
-    } catch (err) {
-      setError("Rewrite Failure: Failed to resynchronize rational response.");
+    } catch (err: any) {
+      setError(formatErrorMessage(err));
     } finally {
       setIsLoading(false);
     }
@@ -519,7 +681,7 @@ export function ChatInterface({
       }
       setDeleteConfig(null);
     } catch (err) {
-      setError("Protocol Failure: Failed to synchronize history vectors.");
+      setError(formatErrorMessage(err));
     }
   };
 
@@ -547,7 +709,7 @@ export function ChatInterface({
 
     recognition.onresult = (event: any) => {
       const transcript = event.results[0][0].transcript;
-      setInput(prev => prev + (prev && !prev.endsWith(' ') ? ' ' : '') + transcript);
+      setVoiceTranscript(prev => prev + (prev && !prev.endsWith(' ') ? ' ' : '') + transcript);
     };
 
     recognition.onerror = (event: any) => {
@@ -577,7 +739,7 @@ export function ChatInterface({
     try {
       let currentId = activeConversationId;
       if (!currentId) {
-        currentId = await dbService.createConversation(`Generation: ${aiPrompt.substring(0, 20)}...`, selectedModel, ethicalMode);
+        currentId = await dbService.createConversation(`Generation: ${aiPrompt.substring(0, 20)}...`, selectedModel, ethicalMode, biasThreshold);
         setActiveConversationId(currentId);
         onConversationCreated?.();
       }
@@ -586,15 +748,43 @@ export function ChatInterface({
       let mediaUrl = "";
       let mimeType = "image/png";
       let fileName = "generated-image.png";
+      let mediaAttachment: Attachment;
 
       if (isImage) {
-        mediaUrl = await aiService.generateImage(aiPrompt);
+        try {
+          console.log("Generating image with prompt:", aiPrompt);
+          const base64Image = await aiService.generateImage(aiPrompt, {
+            style: aiGenConfig.style,
+            lighting: aiGenConfig.lighting,
+            camera: aiGenConfig.camera,
+            mood: aiGenConfig.mood
+          });
+          
+          console.log("Image generated successfully, starting upload...");
+          // Upload to storage to avoid Firestore 1MB document limit
+          const attachment = await uploadBase64Image(base64Image, currentId, fileName);
+          console.log("Image uploaded successfully:", attachment.url);
+          mediaUrl = attachment.url;
+          mimeType = attachment.type;
+          mediaAttachment = attachment;
+        } catch (error) {
+          console.error("Image generation/upload process failed:", error);
+          throw error;
+        }
       } else {
         // AI Video simulation/placeholder since native SDK doesn't support it yet
         await new Promise(resolve => setTimeout(resolve, 3000)); // Simulate work
         mediaUrl = "https://storage.googleapis.com/gtv-videos-bucket/sample/ElephantsDream.mp4";
         mimeType = "video/mp4";
         fileName = "generated-clip.mp4";
+        
+        mediaAttachment = {
+          id: Math.random().toString(36).substring(7),
+          name: fileName,
+          type: mimeType,
+          url: mediaUrl,
+          size: 0
+        };
       }
       
       const lastMsgId = messages.length > 0 ? messages[messages.length - 1].id : null;
@@ -612,13 +802,7 @@ export function ChatInterface({
         conversationId: currentId,
         role: "assistant",
         content: `I've generated the ${aiGenConfig.type} based on your neural prompt.`,
-        attachments: [{
-          id: Math.random().toString(36).substring(7),
-          name: fileName,
-          type: mimeType,
-          url: mediaUrl,
-          size: 0
-        }],
+        attachments: [mediaAttachment],
         parentId: userMsgId
       });
 
@@ -626,7 +810,7 @@ export function ChatInterface({
       setAiPrompt("");
     } catch (err: any) {
       console.error("AI generation failed:", err);
-      setError(`Failed to generate ${aiGenConfig.type}. Please verify your prompt and try again.`);
+      setError(formatErrorMessage(err));
     } finally {
       setIsGeneratingAI(false);
     }
@@ -847,31 +1031,46 @@ export function ChatInterface({
     }, 10);
   };
 
-  const handleSubmit = async (e: React.FormEvent, overrideInput?: string) => {
+  const handleSubmit = async (e?: React.FormEvent, overrideInput?: string) => {
     if (e) e.preventDefault();
-    const finalInput = (overrideInput || input).trim();
-    if ((!finalInput && pendingFiles.length === 0) || isLoading || !user) return;
+    
+    // Combine text and voice input for a unified semantic query
+    let unifiedQuery = (overrideInput || input).trim();
+    if (voiceTranscript) {
+      unifiedQuery = unifiedQuery ? `${unifiedQuery}\n\n[VOICE INPUT TRANSCRIPTION]: ${voiceTranscript}` : `[VOICE INPUT]: ${voiceTranscript}`;
+    }
 
-    const userText = finalInput;
+    if ((!unifiedQuery && pendingFiles.length === 0) || isLoading || !user) return;
+    
+    const userText = unifiedQuery;
     const currentPendingFiles = [...pendingFiles];
     
     setInput("");
+    setVoiceTranscript("");
     setPendingFiles([]);
     setIsLoading(true);
     setError(null);
+    setShowCommands(false);
 
     try {
       let currentId = activeConversationId;
-      const isNewConversation = !currentId;
-
       if (!currentId) {
-        // Initial placeholder title
-        currentId = await dbService.createConversation("New Conversation", selectedModel, ethicalMode);
+        currentId = await dbService.createConversation("New Conversation", selectedModel, ethicalMode, biasThreshold);
         setActiveConversationId(currentId);
         onConversationCreated?.();
       }
 
-      // Upload files first
+      // Optimistic user message local update
+      const optimisticUserMsg: Message = {
+        id: `opt-user-${Date.now()}`,
+        conversationId: currentId,
+        role: "user",
+        content: userText,
+        createdAt: new Date()
+      };
+      setMessages(prev => [...prev, optimisticUserMsg]);
+
+      // Upload files first to form multimodal parts
       const uploadedAttachments: Attachment[] = [];
       for (const file of currentPendingFiles) {
         const attachment = await uploadFile(file, currentId, (progress) => {
@@ -885,8 +1084,14 @@ export function ChatInterface({
         });
       }
 
+      // Update optimistic message with attachments if any
+      if (uploadedAttachments.length > 0) {
+        setMessages(prev => prev.map(m => m.id === optimisticUserMsg.id ? { ...m, attachments: uploadedAttachments } : m));
+      }
+
       const lastMsgId = messages.length > 0 ? messages[messages.length - 1].id : null;
 
+      // Log User message with all modalities (actual DB sync)
       const userMsgId = await dbService.addMessage({
         conversationId: currentId,
         role: "user",
@@ -902,33 +1107,43 @@ export function ChatInterface({
       setStreamingText("");
       let finalFullText = "";
       
-      const stream = aiService.processStreamingInput(userText, historyForAI, selectedModel, ethicalMode, uploadedAttachments);
-      
-      for await (const part of stream) {
-        if (!part.isFull && part.chunk) {
-          setStreamingText(prev => (prev || "") + part.chunk);
-        } else if (part.isFull) {
-          finalFullText = part.fullResponse || "";
-        }
-      }
+      // Multimodal Processor Hit
+      setStreamingText("");
+      const result = await aiService.processInput(
+        userText,
+        historyForAI,
+        selectedModel,
+        ethicalMode,
+        uploadedAttachments,
+        biasThreshold,
+        (chunk) => setStreamingText(prev => (prev || "") + chunk)
+      );
 
       setStreamingText(null);
 
       const assistantMsgId = await dbService.addMessage({
         conversationId: currentId,
         role: "assistant",
-        content: finalFullText,
-        originalContent: finalFullText,
-        isCorrected: false,
+        content: result.finalContent,
+        originalContent: result.originalContent,
+        biasScores: result.biasScores,
+        optimizationReport: result.optimizationReport,
+        isCorrected: result.isCorrected,
+        modelName: result.modelName,
         parentId: userMsgId || lastMsgId
       });
 
-      // Trigger optimization in background to keep UI responsive
-      aiService.optimizeResponse(userText, finalFullText).then(report => {
-        if (assistantMsgId && report) dbService.updateMessageOptimizationReport(assistantMsgId, report);
+      // Background suggested inquiries
+      aiService.generateFollowUpSuggestions([...messages, { role: 'user', content: userText } as Message, { role: 'assistant', content: finalFullText } as Message]).then(suggestions => {
+        if (assistantMsgId && suggestions.length > 0) dbService.updateMessageSuggestions(assistantMsgId, suggestions);
       });
 
-      // Update title with full history
+      // Background search recommendations
+      aiService.generateBiasAwareSearchSuggestions([...messages, { role: 'user', content: userText } as Message, { role: 'assistant', content: finalFullText } as Message]).then(searchSugs => {
+        if (assistantMsgId && searchSugs.length > 0) dbService.updateMessageSearchSuggestions(assistantMsgId, searchSugs);
+      });
+
+      // Update title with full history context
       const updatedHistory = [
         ...messages,
         { role: 'user', content: userText, attachments: uploadedAttachments } as Message,
@@ -938,25 +1153,10 @@ export function ChatInterface({
       const newTitle = await aiService.generateTitleFromHistory(updatedHistory);
       await dbService.updateConversationTitle(currentId, newTitle);
 
-      // Trigger follow-up suggestions in background
-      aiService.generateFollowUpSuggestions(updatedHistory).then(suggestions => {
-        if (assistantMsgId && suggestions.length > 0) {
-          dbService.updateMessageSuggestions(assistantMsgId, suggestions);
-        }
-      });
-
-      // Trigger bias-aware search suggestions in background
-      aiService.generateBiasAwareSearchSuggestions(updatedHistory).then(searchSuggestions => {
-        if (assistantMsgId && searchSuggestions.length > 0) {
-          dbService.updateMessageSearchSuggestions(assistantMsgId, searchSuggestions);
-        }
-      });
-
       onConversationCreated?.();
-
     } catch (err: any) {
       console.error("Chat Error:", err);
-      setError("AI Service Interruption: Failed to process logical vector.");
+      setError(formatErrorMessage(err));
     } finally {
       setIsLoading(false);
       setUploadingFiles({});
@@ -968,7 +1168,7 @@ export function ChatInterface({
       {/* Left Chat Window */}
       <div className="flex-1 flex flex-col bg-transparent min-w-0 relative h-full">
         {/* Header */}
-        <header className="h-14 md:h-20 flex items-center justify-between px-3 md:px-10 glass-panel border-b-0 border-r-0 border-l-0 rounded-none sticky top-0 z-30 shrink-0 transition-all duration-500 bg-white/80 dark:bg-zinc-900/80 backdrop-blur-xl">
+        <header className="h-14 md:h-20 flex items-center justify-between px-3 md:px-10 sticky top-0 z-30 shrink-0 transition-all duration-500 bg-white/60 dark:bg-zinc-900/60 backdrop-blur-2xl border-b border-black/[0.03] dark:border-white/[0.03]">
           <div className="flex gap-2 md:gap-6 items-center truncate min-w-0">
             {/* Mobile Menu Toggle */}
             <button 
@@ -1007,6 +1207,7 @@ export function ChatInterface({
                   </button>
                 ))}
               </div>
+              
             </div>
           </div>
           <div className="flex items-center gap-1.5 md:gap-6">
@@ -1042,7 +1243,7 @@ export function ChatInterface({
             <button 
               onClick={() => setShowRationalMonitor(!showRationalMonitor)}
               className={cn(
-                "p-2 md:p-2.5 rounded-xl md:rounded-2xl transition-all relative group lg:hidden",
+                "p-2 md:p-2.5 rounded-xl md:rounded-2xl transition-all relative group",
                 showRationalMonitor ? "bg-indigo-500 text-white shadow-lg" : "bg-black/5 dark:bg-white/5 text-[var(--text-main)] hover:bg-black/10"
               )}
               title="Rational Integrity Monitor"
@@ -1055,10 +1256,15 @@ export function ChatInterface({
 
             {user ? (
               <div className="flex items-center gap-2 md:gap-4">
+                {user && user.isAnonymous && (
+                  <div className="hidden sm:flex px-3 py-1 bg-brand-gold/10 border border-brand-gold/20 rounded-full mr-2">
+                    <span className="text-[8px] font-black uppercase tracking-widest text-brand-gold">Guest Session</span>
+                  </div>
+                )}
                 <div className="hidden sm:flex flex-col items-end">
-                  <span className="text-[11px] text-[var(--text-main)] uppercase font-bold tracking-widest">{user.displayName || 'Agent'}</span>
+                  <span className="text-[11px] text-[var(--text-main)] uppercase font-bold tracking-widest">{user.isAnonymous ? 'Guest Agent' : (user.displayName || 'Agent')}</span>
                   <div className="flex gap-3">
-                    <button onClick={() => setShowProfileModal(true)} className="text-[9px] text-zinc-600 hover:text-indigo-500 transition-colors uppercase font-bold tracking-widest cursor-pointer opacity-60">Profile</button>
+                    <button onClick={() => setShowProfileModal(true)} className="text-[9px] text-zinc-600 hover:text-indigo-500 transition-colors uppercase font-bold tracking-widest cursor-pointer opacity-60">{user.isAnonymous ? 'Upgrade' : 'Profile'}</button>
                     <button onClick={handleLogout} className="text-[9px] text-zinc-600 hover:text-red-500 transition-colors uppercase font-bold tracking-widest cursor-pointer opacity-60">Log Out</button>
                   </div>
                 </div>
@@ -1098,7 +1304,7 @@ export function ChatInterface({
           onDragLeave={handleDragLeave}
           onDrop={handleDrop}
           className={cn(
-            "flex-1 overflow-y-auto px-4 md:px-10 py-6 md:py-16 space-y-8 md:space-y-24 scroll-smooth custom-scrollbar relative",
+            "flex-1 overflow-y-auto px-4 md:px-10 py-6 md:py-16 space-y-8 md:space-y-24 scroll-smooth custom-scrollbar relative bg-white/30 dark:bg-zinc-900/10",
             isDragging && "bg-indigo-500/5 backdrop-blur-sm"
           )}
         >
@@ -1146,21 +1352,35 @@ export function ChatInterface({
                  </h1>
                </div>
 
-               <div className="flex flex-col items-center space-y-10">
+                <div className="flex flex-col items-center space-y-10">
                   {!user && (
-                    <button 
-                      onClick={handleLogin}
-                      disabled={isAuthenticating}
-                      className="px-12 py-4 text-white text-[10px] uppercase font-bold tracking-[0.3em] rounded-full transition-all shadow-2xl hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed mx-auto"
-                      style={{ background: 'var(--gradient-cta)' }}
-                    >
-                      {isAuthenticating ? (
-                        <>
-                          <Loader2 className="w-4 h-4 animate-spin" />
-                          Establishing...
-                        </>
-                      ) : "Establish Link"}
-                    </button>
+                    <div className="flex flex-col items-center gap-4">
+                      <button 
+                        onClick={handleLogin}
+                        disabled={isAuthenticating}
+                        className="px-12 py-4 text-white text-[10px] uppercase font-bold tracking-[0.3em] rounded-full transition-all shadow-2xl hover:scale-105 active:scale-95 flex items-center justify-center gap-3 disabled:opacity-70 disabled:cursor-not-allowed mx-auto"
+                        style={{ background: 'var(--gradient-cta)' }}
+                      >
+                        {isAuthenticating ? (
+                          <>
+                            <Loader2 className="w-4 h-4 animate-spin" />
+                            Establishing...
+                          </>
+                        ) : (
+                          <>
+                            <LogIn className="w-4 h-4" />
+                            Establish Link
+                          </>
+                        )}
+                      </button>
+                      <button 
+                        onClick={handleGuestLogin}
+                        disabled={isAuthenticating}
+                        className="px-10 py-3 text-zinc-500 hover:text-indigo-500 text-[9px] uppercase font-bold tracking-[0.2em] rounded-full transition-all hover:bg-black/5 dark:hover:bg-white/5 disabled:opacity-70"
+                      >
+                         Continue as Guest
+                      </button>
+                    </div>
                   )}
                </div>
             </div>
@@ -1318,10 +1538,13 @@ export function ChatInterface({
                 )}
               </AnimatePresence>
 
-              {/* Glow Effect */}
-              <div className="absolute -inset-[1px] bg-gradient-to-r from-indigo-500/0 via-indigo-500/20 to-indigo-500/0 rounded-[2rem] opacity-0 group-focus-within/composer:opacity-100 transition-opacity duration-1000 blur-sm pointer-events-none" />
+              {/* Glowing Background Overlay for Input */}
+              <div className="absolute -inset-4 bg-indigo-500/5 rounded-[3rem] blur-3xl opacity-0 group-focus-within/composer:opacity-100 transition-opacity duration-1000 -z-10" />
               
-              <div className="relative bg-white/90 dark:bg-zinc-900/90 border border-black/10 dark:border-white/10 group-focus-within/composer:border-indigo-500/30 group-focus-within/composer:bg-white dark:group-focus-within/composer:bg-zinc-900 backdrop-blur-3xl rounded-[1.8rem] md:rounded-[2rem] p-3 md:p-4 transition-all duration-500 shadow-xl overflow-hidden">
+              <div className={cn(
+                "relative bg-white/90 dark:bg-zinc-900/90 border border-black/10 dark:border-white/10 rounded-[1.8rem] md:rounded-[2rem] p-3 md:p-4 transition-all duration-500 shadow-xl overflow-hidden",
+                isGenMode && "border-indigo-500/40 ring-1 ring-indigo-500/20"
+              )}>
 
                 <AnimatePresence>
                   {pendingFiles.length > 0 && (
@@ -1357,10 +1580,23 @@ export function ChatInterface({
                 </AnimatePresence>
 
                 <div className="flex items-end gap-2 md:gap-4 overflow-hidden min-h-[48px] md:min-h-[56px]">
-                  <textarea
-                    ref={textareaRef}
-                    value={input}
-                    onChange={(e) => setInput(e.target.value)}
+                  <div className="flex flex-col flex-1 min-w-0">
+                    {voiceTranscript && (
+                      <motion.div 
+                        initial={{ opacity: 0, scale: 0.9 }}
+                        animate={{ opacity: 1, scale: 1 }}
+                        className="px-3 py-1 mb-2 bg-indigo-500/10 border border-indigo-500/20 rounded-xl text-indigo-500 text-[10px] font-bold uppercase tracking-wider flex items-center justify-between"
+                      >
+                        <span className="truncate flex-1 italic">" {voiceTranscript} "</span>
+                        <button onClick={() => setVoiceTranscript("")} className="ml-2 p-1 hover:bg-indigo-500/10 rounded-full">
+                          <X className="w-3 h-3" />
+                        </button>
+                      </motion.div>
+                    )}
+                    <textarea
+                      ref={textareaRef}
+                      value={input}
+                      onChange={(e) => setInput(e.target.value)}
                     onKeyDown={(e) => {
                       if (e.key === 'Escape') {
                         setShowCommands(false);
@@ -1387,10 +1623,26 @@ export function ChatInterface({
                     disabled={!user || isLoading}
                     className="flex-1 bg-transparent border-none p-2 md:p-3 text-sm md:text-[15px] font-medium text-[var(--text-main)] placeholder:text-[var(--text-secondary)] focus:outline-none resize-none custom-scrollbar min-h-[40px] md:min-h-[48px] max-h-[250px] transition-all"
                   />
+                  </div>
 
                   {/* Action Buttons */}
                   <div className="flex items-center gap-1 md:gap-1.5 pb-1 md:pb-2 pr-1 md:pr-2 shrink-0">
-                    <div className="flex items-center pr-2 md:pr-4 mr-1 md:mr-2 border-r border-black/5 dark:border-white/5 gap-1">
+                    <div className="flex items-center px-1 md:px-2 mr-1 md:mr-2 border-r border-black/5 dark:border-white/5">
+                      <button 
+                        onClick={() => setIsGenMode(!isGenMode)}
+                        className={cn(
+                          "flex items-center gap-2 px-3 py-1.5 rounded-full text-[9px] font-black uppercase tracking-widest transition-all",
+                          isGenMode 
+                            ? "bg-indigo-600 text-white shadow-lg shadow-indigo-500/30" 
+                            : "bg-black/5 dark:bg-white/5 text-zinc-500 hover:text-indigo-500"
+                        )}
+                      >
+                        <Sparkles className={cn("w-3.5 h-3.5", isGenMode && "animate-pulse")} />
+                        <span className="hidden sm:inline">{isGenMode ? "GEN-AI MODE" : "ANALYSIS"}</span>
+                      </button>
+                    </div>
+
+                    <div className="flex items-center gap-1 shrink-0">
                       <button
                         type="button"
                         onClick={() => setIsActionsExpanded(!isActionsExpanded)}
@@ -1400,7 +1652,7 @@ export function ChatInterface({
                             ? "bg-rose-500 text-white rotate-45 shadow-lg shadow-rose-500/20" 
                             : "bg-black/5 dark:bg-white/5 text-zinc-500 hover:text-indigo-500 hover:bg-indigo-500/10"
                         )}
-                        title={isActionsExpanded ? "Close Actions" : "Open Actions"}
+                        title={isActionsExpanded ? "Close" : "Multimodal Input"}
                       >
                         <Plus className="w-4 h-4 md:w-5 md:h-5" />
                       </button>
@@ -1420,7 +1672,7 @@ export function ChatInterface({
                                 setIsActionsExpanded(false);
                               }}
                               className="p-2 md:p-2.5 rounded-xl bg-black/5 dark:bg-white/5 text-zinc-500 hover:text-indigo-500 hover:bg-indigo-500/10 transition-all hover:scale-110 active:scale-95"
-                              title="Upload Files"
+                              title="Upload Object/Data"
                             >
                               <Upload className="w-4 h-4 md:w-5 md:h-5" />
                               <input
@@ -1439,7 +1691,7 @@ export function ChatInterface({
                                 setIsActionsExpanded(false);
                               }}
                               className="p-2 md:p-2.5 rounded-xl bg-black/5 dark:bg-white/5 text-zinc-500 hover:text-indigo-500 hover:bg-indigo-500/10 transition-all hover:scale-110 active:scale-95 shrink-0"
-                              title="Capture Photo"
+                              title="Capture Prompt Context"
                             >
                               <Camera className="w-4 h-4 md:w-5 md:h-5" />
                             </button>
@@ -1456,21 +1708,9 @@ export function ChatInterface({
                                   ? "bg-rose-500 text-white shadow-lg animate-pulse" 
                                   : "bg-black/5 dark:bg-white/5 text-zinc-500 hover:text-indigo-500 hover:bg-indigo-500/10"
                               )}
-                              title={isListening ? "Stop Voice Input" : "Voice Input"}
+                              title={isListening ? "Processing Stream..." : "Voice Context"}
                             >
                               <Mic className={cn("w-4 h-4 md:w-5 md:h-5", isListening && "animate-bounce")} />
-                            </button>
-
-                            <button
-                              type="button"
-                              onClick={() => {
-                                setAiGenConfig({ isOpen: true, type: 'image' });
-                                setIsActionsExpanded(false);
-                              }}
-                              className="p-2 md:p-2.5 rounded-xl bg-black/5 dark:bg-white/5 text-zinc-500 hover:text-indigo-500 hover:bg-indigo-500/10 transition-all hover:scale-110 active:scale-95 shrink-0"
-                              title="Neural Generation"
-                            >
-                              <Sparkles className="w-4 h-4 md:w-5 md:h-5" />
                             </button>
                           </motion.div>
                         )}
@@ -1479,17 +1719,21 @@ export function ChatInterface({
 
                     <button
                       type="submit"
-                      disabled={(!input.trim() && pendingFiles.length === 0) || isLoading || !user}
-                      onClick={handleSubmit}
+                      disabled={(!input.trim() && pendingFiles.length === 0 && !voiceTranscript) || isLoading || !user}
+                      onClick={isGenMode ? () => setAiGenConfig({ ...aiGenConfig, isOpen: true }) : () => handleSubmit()}
                       className={cn(
-                        "w-10 h-10 md:w-12 md:h-12 rounded-[1.2rem] md:rounded-2xl flex items-center justify-center transition-all shadow-xl active:scale-95 group/send relative",
-                        (input.trim() || pendingFiles.length > 0) && !isLoading 
+                        "w-10 h-10 md:w-12 md:h-12 rounded-[1.2rem] md:rounded-2xl flex items-center justify-center transition-all shadow-xl active:scale-95 group/send relative overflow-hidden",
+                        (input.trim() || pendingFiles.length > 0 || voiceTranscript) && !isLoading && !isGenMode 
                           ? "bg-indigo-600 text-white shadow-indigo-600/20" 
+                          : isGenMode && !isLoading
+                          ? "bg-gradient-to-tr from-brand-orange to-brand-gold text-white"
                           : "bg-black/5 dark:bg-white/5 text-zinc-400"
                       )}
                     >
                       {isLoading ? (
                         <Loader2 className="w-4 h-4 md:w-5 md:h-5 animate-spin" />
+                      ) : isGenMode ? (
+                        <Zap className="w-4 h-4 md:w-5 md:h-5" />
                       ) : (
                         <Send className="w-4 h-4 md:w-5 md:h-5 transition-transform group-hover/send:translate-x-0.5 group-hover/send:-translate-y-0.5" />
                       )}
@@ -1575,10 +1819,6 @@ export function ChatInterface({
           </div>
         )}
       </AnimatePresence>
-      {/* Right Sidebar: Bias Vector Analysis */}
-      <aside className="w-80 glass-panel border-l-0 rounded-none p-10 hidden lg:flex flex-col transition-all duration-500">
-        {renderRationalMonitorContent()}
-      </aside>
 
       <AnimatePresence>
         {showDashboard && user && (
@@ -1615,7 +1855,7 @@ export function ChatInterface({
             animate={{ x: 0, opacity: 1 }}
             exit={{ x: 400, opacity: 0 }}
             transition={{ type: "spring", damping: 30, stiffness: 300 }}
-            className="w-96 border-l border-[var(--border-color)] z-50 bg-[var(--bg-secondary)] shadow-2xl fixed inset-y-0 right-0 lg:hidden p-10 overflow-y-auto custom-scrollbar"
+            className="w-[100vw] sm:w-96 border-l border-[var(--border-color)] z-[70] bg-[var(--bg-secondary)] shadow-2xl fixed inset-y-0 right-0 p-8 md:p-10 overflow-y-auto custom-scrollbar"
           >
             <div className="flex items-center justify-between mb-8">
               <h2 className="text-sm font-bold uppercase tracking-[0.2em] text-[var(--text-main)]">Rational Monitor</h2>
@@ -1636,6 +1876,7 @@ export function ChatInterface({
           <UserProfileModal 
             user={user} 
             onClose={() => setShowProfileModal(false)} 
+            onLogout={handleLogout}
           />
         )}
       </AnimatePresence>
@@ -1683,7 +1924,7 @@ export function ChatInterface({
                     value={aiPrompt}
                     onChange={(e) => setAiPrompt(e.target.value)}
                     placeholder={`e.g., A futuristic cyberpunk cityscape in the style of ethereal watercolor...`}
-                    className="w-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-2xl p-4 text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/30 outline-none min-h-[150px] transition-all resize-none custom-scrollbar"
+                    className="w-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-2xl p-4 text-sm font-medium focus:ring-2 focus:ring-indigo-500/20 focus:border-indigo-500/30 outline-none min-h-[120px] transition-all resize-none custom-scrollbar"
                     onKeyDown={(e) => {
                       if (e.key === 'Enter' && !e.shiftKey) {
                         e.preventDefault();
@@ -1693,7 +1934,51 @@ export function ChatInterface({
                   />
                 </div>
 
-                <div className="flex items-center justify-between">
+                {/* Optional Controls */}
+                <div className="grid grid-cols-2 gap-4">
+                  <div className="space-y-2">
+                    <label className="text-[8px] font-black uppercase tracking-widest text-zinc-500">Style</label>
+                    <select 
+                      value={aiGenConfig.style}
+                      onChange={(e) => setAiGenConfig({ ...aiGenConfig, style: e.target.value })}
+                      className="w-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider outline-none focus:ring-1 focus:ring-indigo-500/30"
+                    >
+                      {['Cinematic', 'Studio', 'Natural'].map(s => <option key={s} value={s}>{s}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[8px] font-black uppercase tracking-widest text-zinc-500">Lighting</label>
+                    <select 
+                      value={aiGenConfig.lighting}
+                      onChange={(e) => setAiGenConfig({ ...aiGenConfig, lighting: e.target.value })}
+                      className="w-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider outline-none focus:ring-1 focus:ring-indigo-500/30"
+                    >
+                      {['Golden Hour', 'Night', 'Soft Light'].map(l => <option key={l} value={l}>{l}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[8px] font-black uppercase tracking-widest text-zinc-500">Camera</label>
+                    <select 
+                      value={aiGenConfig.camera}
+                      onChange={(e) => setAiGenConfig({ ...aiGenConfig, camera: e.target.value })}
+                      className="w-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider outline-none focus:ring-1 focus:ring-indigo-500/30"
+                    >
+                      {['Portrait', 'Wide', 'Macro'].map(c => <option key={c} value={c}>{c}</option>)}
+                    </select>
+                  </div>
+                  <div className="space-y-2">
+                    <label className="text-[8px] font-black uppercase tracking-widest text-zinc-500">Mood</label>
+                    <select 
+                      value={aiGenConfig.mood}
+                      onChange={(e) => setAiGenConfig({ ...aiGenConfig, mood: e.target.value })}
+                      className="w-full bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5 rounded-xl px-3 py-2 text-[10px] font-bold uppercase tracking-wider outline-none focus:ring-1 focus:ring-indigo-500/30"
+                    >
+                      {['Dramatic', 'Neutral', 'Vibrant'].map(m => <option key={m} value={m}>{m}</option>)}
+                    </select>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-between pt-2">
                   <div className="flex -space-x-2">
                     {[1, 2, 3].map(i => (
                       <div key={i} className="w-8 h-8 rounded-full border-2 border-white dark:border-zinc-800 bg-zinc-200 dark:bg-zinc-700 flex items-center justify-center overflow-hidden">

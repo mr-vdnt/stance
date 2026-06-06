@@ -1,33 +1,53 @@
-import { useState, useRef } from "react";
+import { useState, useRef, useEffect } from "react";
 import { User, updateProfile } from "firebase/auth";
 import { ref, uploadBytes, getDownloadURL } from "firebase/storage";
 import { storage, auth } from "../lib/firebase";
-import { X, Camera, Loader2, Check, Link2, Upload, Globe } from "lucide-react";
+import { X, Camera, Loader2, Check, Link2, Upload, Globe, ShieldAlert, LogOut, Info } from "lucide-react";
 import { motion, AnimatePresence } from "motion/react";
 import { cn } from "../lib/utils";
+import { dbService } from "../services/dbService";
 
 interface UserProfileModalProps {
   user: User;
   onClose: () => void;
+  onLogout: () => void;
 }
 
-export function UserProfileModal({ user, onClose }: UserProfileModalProps) {
+export function UserProfileModal({ user, onClose, onLogout }: UserProfileModalProps) {
   const [displayName, setDisplayName] = useState(user.displayName || "");
   const [photoURL, setPhotoURL] = useState(user.photoURL || "");
+  const [biasThreshold, setBiasThreshold] = useState(0.5);
   const [isLoading, setIsLoading] = useState(false);
   const [isSuccess, setIsSuccess] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
+
+  useEffect(() => {
+    const loadPersona = async () => {
+      const persona = await dbService.getUserPersona(user.uid);
+      if (persona && persona.defaultBiasThreshold !== undefined) {
+        setBiasThreshold(persona.defaultBiasThreshold);
+      }
+    };
+    loadPersona();
+  }, [user.uid]);
 
   const handleUpdateProfile = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError(null);
     try {
+      // Update Firebase Auth Profile
       await updateProfile(user, {
         displayName: displayName.trim(),
         photoURL: photoURL
       });
+
+      // Update Custom System Persona
+      await dbService.updateUserPersona(user.uid, {
+        defaultBiasThreshold: biasThreshold
+      });
+
       setIsSuccess(true);
       setTimeout(() => {
         setIsSuccess(false);
@@ -76,15 +96,58 @@ export function UserProfileModal({ user, onClose }: UserProfileModalProps) {
         className="w-full max-w-md bg-[var(--bg-secondary)] dark:bg-[var(--bg-card)] rounded-[32px] overflow-hidden shadow-2xl border border-[var(--border-color)]"
       >
         <div className="relative p-8">
-          <button 
-            onClick={onClose}
-            className="absolute top-6 right-6 p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
-          >
-            <X className="w-5 h-5 text-zinc-400 dark:text-zinc-500" />
-          </button>
+          <div className="absolute top-6 right-6 flex items-center gap-2">
+            <button 
+              onClick={() => {
+                onLogout();
+                onClose();
+              }}
+              className="p-2 rounded-xl hover:bg-red-500/10 text-zinc-400 hover:text-red-500 transition-colors"
+              title="Sign Out"
+            >
+              <LogOut className="w-5 h-5" />
+            </button>
+            <button 
+              onClick={onClose}
+              className="p-2 rounded-xl hover:bg-black/5 dark:hover:bg-white/5 transition-colors"
+            >
+              <X className="w-5 h-5 text-zinc-400 dark:text-zinc-500" />
+            </button>
+          </div>
 
-          <h2 className="text-xl font-bold text-[var(--text-main)] mb-1">User Profile</h2>
-          <p className="text-xs text-zinc-600 dark:text-zinc-400 uppercase tracking-widest font-bold mb-8">Management Module</p>
+          <h2 className="text-xl font-bold text-[var(--text-main)] mb-1">
+            {user.isAnonymous ? 'Guest Protocol' : 'User Profile'}
+          </h2>
+          <p className="text-xs text-zinc-600 dark:text-zinc-400 uppercase tracking-widest font-bold mb-8">
+            {user.isAnonymous ? 'Ephemeral Session' : 'Management Module'}
+          </p>
+
+          {user.isAnonymous && (
+            <div className="mb-8 p-6 rounded-[2.5rem] bg-indigo-500/5 border border-indigo-500/20 relative overflow-hidden group">
+              <div className="absolute top-0 right-0 w-32 h-32 bg-indigo-500/5 rounded-full blur-3xl -mr-16 -mt-16 group-hover:bg-indigo-500/10 transition-colors" />
+              <div className="relative z-10 space-y-4">
+                <div className="flex items-center gap-3">
+                  <div className="w-10 h-10 rounded-2xl bg-indigo-500/10 flex items-center justify-center">
+                    <ShieldAlert className="w-5 h-5 text-indigo-500" />
+                  </div>
+                  <h3 className="text-sm font-bold text-[var(--text-main)] leading-tight">Secure your data</h3>
+                </div>
+                <p className="text-[11px] text-zinc-500 leading-relaxed font-medium">
+                  You are currently using a <span className="text-indigo-500 font-bold uppercase">Guest Session</span>. Register a permanent account to synchronize your chats, generated images, and custom configurations across devices.
+                </p>
+                <button 
+                  onClick={() => {
+                    onClose();
+                    // This will trigger the upgrade logic in ChatInterface
+                    (window as any).triggerUpgrade?.();
+                  }}
+                  className="w-full py-3.5 bg-indigo-600 text-white text-[10px] font-black uppercase tracking-widest rounded-2xl shadow-xl shadow-indigo-500/20 hover:scale-[1.02] active:scale-95 transition-all"
+                >
+                  Link Google Account
+                </button>
+              </div>
+            </div>
+          )}
 
           <div className="flex flex-col items-center mb-8">
             <div className="relative group mb-6">
@@ -164,6 +227,33 @@ export function UserProfileModal({ user, onClose }: UserProfileModalProps) {
                 disabled
                 className="w-full px-5 py-4 bg-black/[0.02] dark:bg-white/[0.02] rounded-2xl border border-transparent text-zinc-400 text-sm font-medium cursor-not-allowed"
               />
+            </div>
+
+            <div className="space-y-4 p-5 md:p-6 bg-black/5 dark:bg-white/5 rounded-[2rem] border border-black/5 dark:border-white/10">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <ShieldAlert className="w-4 h-4 text-brand-gold" />
+                  <label className="text-[10px] font-black uppercase tracking-[0.15em] text-zinc-600 dark:text-zinc-400">Bias Threshold</label>
+                </div>
+                <span className="text-xs font-black text-indigo-500">{Math.round(biasThreshold * 100)}%</span>
+              </div>
+              
+              <input 
+                type="range"
+                min="0"
+                max="1"
+                step="0.05"
+                value={biasThreshold}
+                onChange={(e) => setBiasThreshold(parseFloat(e.target.value))}
+                className="w-full h-1.5 bg-indigo-200 dark:bg-zinc-700 rounded-lg appearance-none cursor-pointer accent-indigo-600"
+              />
+              
+              <div className="flex items-start gap-2 opacity-50">
+                <Info className="w-3 h-3 mt-0.5 shrink-0" />
+                <p className="text-[9px] font-medium leading-tight">
+                  Defines the sensitivity of the <span className="font-bold">Output Correction Module</span>. Lower values trigger more aggressive debiasing.
+                </p>
+              </div>
             </div>
 
             {error && (

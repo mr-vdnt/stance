@@ -1,5 +1,5 @@
-import { useState } from "react";
-import { ThumbsUp, ThumbsDown, Info, ChevronDown, ChevronUp, MoreHorizontal, Trash2, RotateCcw, FileText, Image as ImageIcon, Video, Music, Download, ExternalLink, Edit3, Copy, Check, Activity, Zap, Fingerprint, Plus } from "lucide-react";
+import { useState, memo } from "react";
+import { ThumbsUp, ThumbsDown, Info, ChevronDown, ChevronUp, MoreHorizontal, Trash2, RotateCcw, FileText, Image as ImageIcon, Video, Music, Download, ExternalLink, Edit3, Copy, Check, Activity, Zap, Fingerprint, Plus, Search, Shield, AlertTriangle, ArrowRight } from "lucide-react";
 import ReactMarkdown from "react-markdown";
 import { Message, Attachment } from "../types";
 import { cn } from "../lib/utils";
@@ -8,18 +8,13 @@ import { motion, AnimatePresence } from "motion/react";
 import { BiasRadarChart, AnalyticalSummary, DataVisualizationWrapper } from "./Visualizations";
 import { AIOrb } from "./AIOrb";
 
-interface AttachmentPreviewProps {
-  attachment: Attachment;
-}
-
-function AttachmentPreview({ attachment }: AttachmentPreviewProps) {
+const AttachmentPreview = memo(({ attachment }: { attachment: Attachment }) => {
   const isImage = attachment.type.startsWith('image/');
   const isVideo = attachment.type.startsWith('video/');
   const isAudio = attachment.type.startsWith('audio/');
-  const isDoc = !isImage && !isVideo && !isAudio;
 
   return (
-    <div className="group/file relative rounded-[1.5rem] md:rounded-3xl overflow-hidden border border-[var(--border-color)] bg-white dark:bg-zinc-900 transition-all hover:shadow-xl hover:scale-[1.02] duration-500">
+    <div className="group/file relative rounded-[1.5rem] md:rounded-3xl overflow-hidden border border-black/[0.04] dark:border-white/[0.04] bg-white/60 dark:bg-zinc-900/60 backdrop-blur-xl transition-all hover:shadow-2xl hover:scale-[1.02] duration-500">
       {isImage && (
         <div className="aspect-video w-full overflow-hidden bg-zinc-100 dark:bg-zinc-900">
           <img 
@@ -94,32 +89,23 @@ function AttachmentPreview({ attachment }: AttachmentPreviewProps) {
       )}
     </div>
   );
-}
+});
 
-interface MessageItemProps {
-  message: Message;
-  onDelete?: (id: string, type: 'soft' | 'hard') => void;
-  onRewrite?: (id: string, content: string) => void;
-  onRegenerate?: () => void;
-  onInspect?: (id: string) => void;
-  onSuggestionClick?: (suggestion: string) => void;
-}
-
-function RationalMonitor({ message, onInspect }: { message: Message; onInspect?: (id: string) => void }) {
+const RationalMonitor = memo(({ message, onInspect }: { message: Message; onInspect?: (id: string) => void }) => {
   const [isOpen, setIsOpen] = useState(false);
   const [showShift, setShowShift] = useState(true);
   const [activeInfo, setActiveInfo] = useState<string | null>(null);
   
   const indicators = [
     { label: 'Toxicity', key: 'toxicity', desc: 'Measures inflammatory, insulting, or aggressive language patterns.', color: 'bg-red-500', lightBg: 'bg-red-500/10', lightBorder: 'border-red-200/50', lightText: 'text-red-700' },
-    { label: 'Gender', key: 'genderBias', desc: 'Checks for gender stereotypes or unequal representation.', color: 'bg-pink-500', lightBg: 'bg-pink-500/10', lightBorder: 'border-pink-200/50', lightText: 'text-pink-700' },
-    { label: 'Race', key: 'racialBias', desc: 'Monitors for ethnic prejudices or racial stereotyping.', color: 'bg-emerald-500', lightBg: 'bg-emerald-500/10', lightBorder: 'border-emerald-200/50', lightText: 'text-emerald-700' },
+    { label: 'Gender Bias', key: 'genderBias', desc: 'Checks for gender stereotypes or unequal representation.', color: 'bg-pink-500', lightBg: 'bg-pink-500/10', lightBorder: 'border-pink-200/50', lightText: 'text-pink-700' },
+    { label: 'Racial Bias', key: 'racialBias', desc: 'Monitors for ethnic prejudices or racial stereotyping.', color: 'bg-emerald-500', lightBg: 'bg-emerald-500/10', lightBorder: 'border-emerald-200/50', lightText: 'text-emerald-700' },
+    { label: 'Logical', key: 'logical', desc: 'Evaluates the factual grounding and syllogistic integrity.', isPositive: true, color: 'bg-indigo-500', lightBg: 'bg-indigo-500/10', lightBorder: 'border-indigo-200/50', lightText: 'text-indigo-700' },
     { label: 'Political', key: 'politicalBias', desc: 'Identifies ideological leanings or agenda-driven phrasing.', color: 'bg-blue-500', lightBg: 'bg-blue-500/10', lightBorder: 'border-blue-200/50', lightText: 'text-blue-700' },
-    { label: 'Age', key: 'ageism', desc: 'Detects bias or discrimination based on perceived age.', color: 'bg-orange-500', lightBg: 'bg-orange-500/10', lightBorder: 'border-orange-200/50', lightText: 'text-orange-700' },
-    { label: 'Disability', key: 'ableism', desc: 'Screens for ableist language or accessibility neglect.', color: 'bg-violet-500', lightBg: 'bg-violet-500/10', lightBorder: 'border-violet-200/50', lightText: 'text-violet-700' },
+    { label: 'Ageism', key: 'ageism', desc: 'Detects bias or discrimination based on perceived age.', color: 'bg-orange-500', lightBg: 'bg-orange-500/10', lightBorder: 'border-orange-200/50', lightText: 'text-orange-700' },
+    { label: 'Ableism', key: 'ableism', desc: 'Screens for ableist language or accessibility neglect.', color: 'bg-violet-500', lightBg: 'bg-violet-500/10', lightBorder: 'border-violet-200/50', lightText: 'text-violet-700' },
     { label: 'Social', key: 'socialBias', desc: 'Analyzes class-based assumptions or social status prejudice.', color: 'bg-sky-500', lightBg: 'bg-sky-500/10', lightBorder: 'border-sky-200/50', lightText: 'text-sky-700' },
     { label: 'Economic', key: 'economicBias', desc: 'Flags bias related to wealth, poverty, or financial standing.', color: 'bg-purple-500', lightBg: 'bg-purple-500/10', lightBorder: 'border-purple-200/50', lightText: 'text-purple-700' },
-    { label: 'Logical', key: 'logical', desc: 'Evaluates the factual grounding and syllogistic integrity.', isPositive: true, color: 'bg-indigo-500', lightBg: 'bg-indigo-500/10', lightBorder: 'border-indigo-200/50', lightText: 'text-indigo-700' },
     { label: 'Certainty', key: 'certainty', desc: 'Statistical confidence in the neutrality of this specific response.', isPositive: true, color: 'bg-emerald-400', lightBg: 'bg-emerald-400/10', lightBorder: 'border-emerald-200/50', lightText: 'text-emerald-700' },
   ];
 
@@ -128,7 +114,7 @@ function RationalMonitor({ message, onInspect }: { message: Message; onInspect?:
   const confidenceScores = message.biasScores?.confidenceScores;
 
   return (
-    <div className="mt-4 border border-indigo-500/20 rounded-[1.8rem] md:rounded-3xl overflow-hidden bg-indigo-500/5 backdrop-blur-3xl transition-all duration-500">
+    <div className="mt-4 border border-black/[0.03] dark:border-white/[0.03] rounded-[2rem] md:rounded-3xl overflow-hidden bg-indigo-500/[0.02] dark:bg-indigo-500/[0.03] backdrop-blur-3xl transition-all duration-500 hover:shadow-2xl hover:shadow-indigo-500/5">
       <button 
         onClick={() => {
           setIsOpen(!isOpen);
@@ -347,9 +333,18 @@ function RationalMonitor({ message, onInspect }: { message: Message; onInspect?:
       </AnimatePresence>
     </div>
   );
+});
+
+interface MessageItemProps {
+  message: Message;
+  onDelete?: (id: string, type: 'soft' | 'hard') => void;
+  onRewrite?: (id: string, content: string) => void;
+  onRegenerate?: () => void;
+  onInspect?: (id: string) => void;
+  onSuggestionClick?: (suggestion: string) => void;
 }
 
-export function MessageItem({ message, onDelete, onRewrite, onRegenerate, onInspect, onSuggestionClick }: MessageItemProps) {
+export const MessageItem = memo(({ message, onDelete, onRewrite, onRegenerate, onInspect, onSuggestionClick }: MessageItemProps) => {
   const [showOriginal, setShowOriginal] = useState(false);
   const [showMenu, setShowMenu] = useState(false);
   const [isEditing, setIsEditing] = useState(false);
@@ -681,59 +676,76 @@ export function MessageItem({ message, onDelete, onRewrite, onRegenerate, onInsp
       )}
 
       {isAssistant && message.searchSuggestions && message.searchSuggestions.length > 0 && (
-        <div className="flex flex-col gap-5 ml-10 md:ml-20 mt-10 animate-in fade-in slide-in-from-bottom-4 duration-1000 delay-500">
-          <div className="flex items-center gap-3">
-            <div className="w-8 h-px bg-gradient-to-r from-emerald-500/50 to-transparent" />
-            <span className="p-1 rounded-md bg-emerald-500/10">
-              <Zap className="w-3 h-3 text-emerald-500" />
-            </span>
-            <span className="text-[10px] font-black uppercase tracking-[0.25em] text-emerald-500/80">Perspective Vector Recommendations</span>
+        <div className="flex flex-col gap-6 ml-10 md:ml-20 mt-12 mb-8 animate-in fade-in slide-in-from-bottom-6 duration-1000 delay-500">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-3">
+              <div className="w-8 h-px bg-gradient-to-r from-indigo-500/50 to-transparent" />
+              <span className="p-1.5 rounded-xl bg-indigo-500/10">
+                <Search className="w-3.5 h-3.5 text-indigo-500" />
+              </span>
+              <span className="text-[10px] font-black uppercase tracking-[0.25em] text-indigo-500/80">Neural Vector Explorer</span>
+            </div>
           </div>
-          <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
+          
+          <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
             {message.searchSuggestions.map((suggestion, idx) => (
               <button
                 key={idx}
                 onClick={() => onSuggestionClick?.(suggestion.query)}
                 className={cn(
-                  "flex flex-col items-start px-6 py-5 rounded-[2rem] border transition-all hover:scale-[1.03] active:scale-95 shadow-sm group/suggest relative overflow-hidden text-left",
+                  "flex flex-col items-start px-7 py-6 rounded-[2.5rem] border transition-all hover:scale-[1.03] active:scale-95 shadow-sm group/suggest relative overflow-hidden text-left",
                   suggestion.category === 'neutral' 
-                    ? "bg-emerald-500/[0.03] border-emerald-500/20 hover:border-emerald-500/50 shadow-emerald-500/5" 
+                    ? "bg-emerald-500/[0.03] border-emerald-500/10 hover:border-emerald-500/40 hover:shadow-emerald-500/10" 
                     : suggestion.category === 'mildly_biased'
-                    ? "bg-amber-500/[0.03] border-amber-500/20 hover:border-amber-500/50 shadow-amber-500/5"
-                    : "bg-rose-500/[0.03] border-rose-500/20 hover:border-rose-500/50 shadow-rose-500/5"
+                    ? "bg-amber-500/[0.03] border-amber-500/10 hover:border-amber-500/40 hover:shadow-amber-500/10"
+                    : "bg-rose-500/[0.03] border-rose-500/10 hover:border-rose-500/40 hover:shadow-rose-500/10"
                 )}
               >
-                <div className="flex items-center gap-2.5 mb-3">
+                <div className="flex items-center justify-between w-full mb-4">
                   <span className={cn(
-                    "text-[8px] font-black uppercase tracking-widest px-2.5 py-1 rounded-full border",
+                    "text-[8px] font-black uppercase tracking-widest px-3 py-1 rounded-full flex items-center gap-1.5",
                     suggestion.category === 'neutral' 
-                      ? "text-emerald-600 bg-emerald-500/10 border-emerald-500/20" 
+                      ? "text-emerald-700 bg-emerald-500/10 border border-emerald-500/20" 
                       : suggestion.category === 'mildly_biased'
-                      ? "text-amber-600 bg-amber-500/10 border-amber-500/20"
-                      : "text-rose-600 bg-rose-500/10 border-rose-500/20"
+                      ? "text-amber-700 bg-amber-500/10 border border-amber-500/20"
+                      : "text-rose-700 bg-rose-500/10 border border-rose-500/20"
                   )}>
+                    {suggestion.category === 'neutral' ? <Shield className="w-2.5 h-2.5 fill-current" /> : <AlertTriangle className="w-2.5 h-2.5 fill-current" />}
                     {suggestion.category.replace('_', ' ')}
                   </span>
-                  <div className="flex items-center gap-1.5 grayscale group-hover/suggest:grayscale-0 transition-all">
-                    <span className="text-[8px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-tighter">
+                  
+                  <div className="flex items-center gap-1 text-indigo-500 opacity-0 group-hover/suggest:opacity-100 transition-all translate-x-2 group-hover/suggest:translate-x-0">
+                    <span className="text-[8px] font-black uppercase tracking-widest">Explore</span>
+                    <ArrowRight className="w-3 h-3" />
+                  </div>
+                </div>
+
+                <div className="text-[13px] font-black text-[var(--text-main)] group-hover/suggest:text-indigo-600 transition-colors leading-tight mb-3">
+                  {suggestion.query}
+                </div>
+
+                <div className="flex flex-wrap gap-2 mb-4">
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
+                    <Fingerprint className="w-2.5 h-2.5 text-zinc-400" />
+                    <span className="text-[8px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-tighter">
                       {suggestion.bias_type}
                     </span>
-                    <div className="w-1 h-1 rounded-full bg-zinc-300 dark:bg-zinc-700" />
-                    <span className="text-[8px] font-bold text-zinc-400 dark:text-zinc-500 uppercase tracking-tighter">
+                  </div>
+                  <div className="flex items-center gap-1.5 px-2 py-0.5 rounded-lg bg-black/5 dark:bg-white/5 border border-black/5 dark:border-white/5">
+                    <Activity className="w-2.5 h-2.5 text-zinc-400" />
+                    <span className="text-[8px] font-bold text-zinc-500 dark:text-zinc-400 uppercase tracking-tighter">
                       {suggestion.bias_direction}
                     </span>
                   </div>
                 </div>
-                <div className="text-xs font-bold text-[var(--text-main)] group-hover/suggest:text-indigo-600 transition-colors leading-relaxed mb-2">
-                  {suggestion.query}
-                </div>
-                <p className="text-[9px] text-zinc-500 dark:text-zinc-400 font-medium leading-relaxed line-clamp-2 opacity-60 group-hover/suggest:opacity-100 transition-opacity">
+
+                <p className="text-[10px] text-zinc-500 dark:text-zinc-400 font-medium leading-relaxed opacity-70 group-hover/suggest:opacity-100 transition-opacity">
                   {suggestion.reason}
                 </p>
                 
-                {/* Decorative background element */}
+                {/* Visual state indicator */}
                 <div className={cn(
-                  "absolute -bottom-4 -right-4 w-12 h-12 rounded-full opacity-5 group-hover:scale-150 transition-transform duration-700",
+                  "absolute bottom-0 right-0 w-24 h-24 blur-3xl rounded-full opacity-0 group-hover/suggest:opacity-10 transition-opacity duration-700",
                   suggestion.category === 'neutral' ? "bg-emerald-500" : suggestion.category === 'mildly_biased' ? "bg-amber-500" : "bg-rose-500"
                 )} />
               </button>
@@ -743,4 +755,4 @@ export function MessageItem({ message, onDelete, onRewrite, onRegenerate, onInsp
       )}
     </div>
   );
-}
+});

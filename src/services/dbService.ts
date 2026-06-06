@@ -47,7 +47,7 @@ function cleanObject(obj: any): any {
 }
 
 export const dbService = {
-  async createConversation(title: string, preferredModel: string = "gemini-3-flash-preview", ethicalMode: string = "utilitarian"): Promise<string> {
+  async createConversation(title: string, preferredModel: string = "gemini-3-flash-preview", ethicalMode: string = "utilitarian", biasThreshold: number = 0.5): Promise<string> {
     const path = 'conversations';
     try {
       const docRef = await addDoc(collection(db, path), {
@@ -55,6 +55,7 @@ export const dbService = {
         title,
         preferredModel,
         ethicalMode,
+        biasThreshold,
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp(),
       });
@@ -85,6 +86,10 @@ export const dbService = {
 
   async updatePreferredModel(conversationId: string, model: string): Promise<void> {
     return this.updateConversationMetadata(conversationId, { preferredModel: model });
+  },
+
+  async updateBiasThreshold(conversationId: string, threshold: number): Promise<void> {
+    return this.updateConversationMetadata(conversationId, { biasThreshold: threshold });
   },
 
   async addMessage(message: Partial<Message>): Promise<string> {
@@ -263,6 +268,39 @@ export const dbService = {
       await batch.commit();
     } catch (error) {
       handleFirestoreError(error, OperationType.DELETE, `messages/${messageId}`);
+    }
+  },
+
+  async getUserPersona(userId: string): Promise<any | null> {
+    const path = `users/${userId}`;
+    try {
+      const snapshot = await getDocs(query(collection(db, 'users'), where('userId', '==', userId)));
+      if (snapshot.empty) return null;
+      return { id: snapshot.docs[0].id, ...snapshot.docs[0].data() };
+    } catch (error) {
+      handleFirestoreError(error, OperationType.GET, path);
+    }
+    return null;
+  },
+
+  async updateUserPersona(userId: string, persona: any): Promise<void> {
+    const path = `users`;
+    try {
+      const snapshot = await getDocs(query(collection(db, 'users'), where('userId', '==', userId)));
+      if (snapshot.empty) {
+        await addDoc(collection(db, 'users'), {
+          userId,
+          ...cleanObject(persona),
+          updatedAt: serverTimestamp(),
+        });
+      } else {
+        await updateDoc(doc(db, 'users', snapshot.docs[0].id), {
+          ...cleanObject(persona),
+          updatedAt: serverTimestamp(),
+        });
+      }
+    } catch (error) {
+      handleFirestoreError(error, OperationType.UPDATE, path);
     }
   }
 };

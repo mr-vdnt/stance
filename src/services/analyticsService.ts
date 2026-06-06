@@ -10,6 +10,7 @@ export interface AnalyticsData {
   topicDistribution: { label: string; value: number }[];
   engagementOverTime: { date: string; count: number }[];
   biasTrends: { date: string; [key: string]: any }[];
+  roleDistribution: { label: string; value: number }[];
 }
 
 export const analyticsService = {
@@ -31,6 +32,13 @@ export const analyticsService = {
     }
 
     const assistantMessages = allMessages.filter(m => m.role === 'assistant' && !m.isDeleted);
+    const userMessages = allMessages.filter(m => m.role === 'user' && !m.isDeleted);
+
+    // Role Distribution calculation
+    const roleDistribution = [
+      { label: 'Assistant', value: assistantMessages.length },
+      { label: 'User', value: userMessages.length }
+    ];
     
     // 1. Rationality Scores
     const rationalScores = assistantMessages
@@ -100,7 +108,8 @@ export const analyticsService = {
       averageRationality: avgRationality,
       topicDistribution,
       engagementOverTime,
-      biasTrends
+      biasTrends,
+      roleDistribution
     };
   },
 
